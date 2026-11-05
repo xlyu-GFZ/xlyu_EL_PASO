@@ -40,6 +40,7 @@ class DailyLEORBStrategy(ep.typing.MonthlyRBStrategy):
             "PSD",
             "R_Eq",
             "MLT",
+            "MLT_Eq",
             "L_m",
             "L_star",
             "Alpha_LC",

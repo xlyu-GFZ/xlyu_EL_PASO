@@ -85,10 +85,12 @@ class MonthlyRBStrategy(SavingStrategy):
         return [
             "FEDU",
             "FPDU",
+            "FEDO",
             "Epoch",
             "Alpha_Eq",
             "Energy_FEDU",
             "Energy_FPDU",
+            "Energy_FEDO",
             "Alpha",
             "B_Calc",
             "B_Eq",

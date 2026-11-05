@@ -10,7 +10,7 @@ import logging
 import os
 import sys
 import typing
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -442,4 +442,6 @@ CLI_DEFAULTS = {
 }
 
 if __name__ == "__main__":
-    ep.run_recipe_cli(process_arase_xep_real_time, defaults=CLI_DEFAULTS)
+    start_time = datetime(2024, 5, 9, tzinfo=timezone.utc)
+    end_time = datetime(2024, 5, 16, 23, 59, 59, tzinfo=timezone.utc)
+    ep.run_recipe_cli(process_arase_xep_real_time(start_time=start_time, end_time=end_time), defaults=CLI_DEFAULTS)

@@ -78,8 +78,8 @@ class GFZStrategy(SavingStrategy):
         self.mag_field = mag_field
 
         self.output_files = [
-            OutputFile("flux", ["Epoch", ("FEDU", "FPDU")]),
-            OutputFile("alpha_and_energy", ["Epoch", "Alpha", "Alpha_Eq", ("Energy_FEDU", "Energy_FPDU")]),
+            OutputFile("flux", ["Epoch", ("FPDU", "FPDU")]),
+            OutputFile("alpha_and_energy", ["Epoch", "Alpha", "Alpha_Eq", ("Energy_FPDU", "Energy_FPDU")]),
             OutputFile("mlt", ["Epoch", "MLT"]),
             OutputFile("lstar", ["Epoch", "L_star"]),
             OutputFile("lm", ["Epoch", "L_m"]),
@@ -87,6 +87,7 @@ class GFZStrategy(SavingStrategy):
             OutputFile("xGEO", ["Epoch", "Position"]),
             OutputFile("invmu_and_invk", ["Epoch", "InvMu", "InvK"]),
             OutputFile("bfield", ["Epoch", "B_Eq", "B_Calc"]),
+            OutputFile("observed_bfield", ["Epoch", "B_total_obs",]),
             OutputFile("R0", ["Epoch", "R_Eq"]),
         ]
 

@@ -160,13 +160,16 @@ def process_arase_xep(
         file_name_stem=file_name_stem,
         extraction_infos=extraction_infos,
     )
-
+    xep_variables["Alpha_range"] = ep.Variable(
+        data=np.array([0.0, 90.0]),
+        original_unit=u.degree,
+    )
     # average energy bins
     energies = xep_variables["Energy"].get_data().astype(np.float64)
     xep_variables["Energy"].set_data(np.mean(energies, axis=0), unit="same")
 
     # add local pitch angles
-    xep_variables["AlphaLocal"] = ep.Variable(data=np.array([10, 30, 50, 70, 90]), original_unit=u.degree)
+    xep_variables["AlphaLocal"] = ep.Variable(data=np.array([10, 20, 30, 40, 50, 60, 70, 80, 90]), original_unit=u.degree)
 
     # put into units of omnidirectional flux
     xep_variables["FEDO"].set_data(
@@ -295,12 +298,16 @@ def process_arase_xep(
     variables_to_save: dict[ep.typing.InternalName, ep.Variable] = {
         "Epoch": binned_time_variable,
         "FEDU": xep_variables["FEDU"],
+        "FEDO": xep_variables["FEDO"],
+        "Energy_FEDO": xep_variables["Energy"],
         "Energy_FEDU": xep_variables["Energy"],
         "Alpha": xep_variables["AlphaLocal"],
+        #"Alpha_range":xep_variables["Alpha_range"],
         "Alpha_Eq": xep_variables["Alpha_eq"],
         "R_Eq": orb_variables["R0"],
         "MLT": orb_variables["MLT"],
         "L_m": orb_variables["Lm"],
+        "L_star": orb_variables["Lstar"],
         "PSD": psd_var,
     }
 
@@ -325,4 +332,6 @@ CLI_DEFAULTS = {
 }
 
 if __name__ == "__main__":
-    ep.run_recipe_cli(process_arase_xep, defaults=CLI_DEFAULTS)
+    start_time = datetime(2024, 5, 8, tzinfo=timezone.utc)
+    end_time = datetime(2024, 5, 16, 23, 59, 59, tzinfo=timezone.utc)
+    ep.run_recipe_cli(process_arase_xep(start_time=start_time, end_time=end_time), defaults=CLI_DEFAULTS)

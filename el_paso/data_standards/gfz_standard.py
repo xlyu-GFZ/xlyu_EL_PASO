@@ -82,7 +82,7 @@ class GFZStandard(DataStandard[GFZVarNames]):
                 "FEDO",
                 "Electron differential omnidirectional flux.",
                 (u.cm**2 * u.s * u.keV) ** (-1),
-                ["Epoch", "Energy_FEDO", "Alpha_range"],
+                ["Epoch", "Energy_FEDO"],
             ),
             "FPDU": VariableInfo[GFZVarNames](
                 "FPDU",
@@ -157,9 +157,16 @@ class GFZStandard(DataStandard[GFZVarNames]):
                 u.MeV / u.G,
                 ["Epoch", ("Energy_FEDU", "Energy_FPDU"), "Alpha"],
             ),
+            "Mu_real": VariableInfo[GFZVarNames](
+                "Mu_real",
+                "Calculated first adiabatic invariant based on observed B field.",
+                u.MeV / u.G,
+                ["Epoch", ("Energy_FEDU", "Energy_FPDU"), "Alpha"],
+            ),
             "InvK": VariableInfo[GFZVarNames](
                 "InvK", "Calculated modified second adiabatic invariant.", ep.units.RE * u.G**0.5, ["Epoch", "Alpha"]
             ),
+
             "Wave_frequency": VariableInfo[GFZVarNames](
                 "freq", "Frequency of the power spectral density.", u.Hz, ["Wave_frequency"]
             ),
