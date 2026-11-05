@@ -19,6 +19,8 @@ from importlib import import_module
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Protocol, TypeAlias
 
+from el_paso.variable import Variable
+
 if TYPE_CHECKING:
     from el_paso import ExtractionInfo
     from el_paso.data_standard import ConsistencyCheck, DataStandard, VariableInfo
@@ -27,16 +29,19 @@ if TYPE_CHECKING:
     from el_paso.processing.compute_magnetic_field_variables import VariableRequest
     from el_paso.saving_strategies.daily_leo_rb_strategy import DailyLEORBStrategy
     from el_paso.saving_strategies.daily_wave_strategy import DailyWaveStrategy
-    from el_paso.saving_strategies.density_netcdf_strategy import DensityNetCDFStrategy
     from el_paso.saving_strategies.gfz_strategy import GFZStrategy
+    from el_paso.saving_strategies.monthly_density_strategy import MonthlyDensityStrategy
     from el_paso.saving_strategies.monthly_rb_strategy import MonthlyRBStrategy
+    from el_paso.saving_strategies.rbsp_density_strategy import RBSPDensityStrategy
     from el_paso.saving_strategies.single_file_strategy import SingleFileStrategy
     from el_paso.saving_strategy import OutputFile, SavingStrategy
-    from el_paso.variable import Variable, VariableMetadata
+    from el_paso.variable import VariableMetadata
 
 MagFieldVarTypes: TypeAlias = Literal[
     "Alpha_LC_Eq",
     "Alpha_LC",
+    "Alpha_DLC_Eq",
+    "Alpha_DLC",
     "B_Calc",
     "B_fofl",
     "B_Eq",
@@ -51,20 +56,28 @@ MagFieldVarTypes: TypeAlias = Literal[
     "InvMu",
     "InvK",
     "I",
+    "f_ce",
+    "f_ce_Eq",
 ]
 
-FixedDimensionName = Literal["Position_components", "min_max"]
+FixedDimensionName = Literal["Position_components", "min_max", "W_components"]
 
 InternalName: TypeAlias = (
     Literal[
         "FEDU",
+        "FEDU_SA",
         "FEDO",
         "FEIU",
+        "FEIU_SA",
         "FPDU",
+        "FPDU_SA",
+        "FIDU",
+        "FIDU_SA",
         "Energy_FEDU",
         "Energy_FEDO",
         "Energy_FEIU",
         "Energy_FPDU",
+        "Energy_FIDU",
         "Epoch",
         "Alpha",
         "Alpha_range",
@@ -75,7 +88,12 @@ InternalName: TypeAlias = (
         "Position_geo_alt",
         "Position_geo_lat",
         "Position_geo_lon",
-        "Number_density",
+        "Number_density_scpot",
+        "Number_density_scpot_Eq",
+        "Number_density_spectrogram",
+        "Number_density_spectrogram_Eq",
+        "Number_density_other",
+        "Number_density_other_Eq",
         "Wave_normal_angle",
         "Wave_ellipticity",
         "Wave_planarity",
@@ -83,6 +101,19 @@ InternalName: TypeAlias = (
         "Magnetic_Power_Spectral_Density",
         "Wave_frequency_bandwidth",
         "B_total_obs",
+        "Kp",
+        "Dst",
+        "Pdyn",
+        "ByIMF",
+        "BzIMF",
+        "Vsw",
+        "Nsw",
+        "G1",
+        "G2",
+        "G3",
+        "W_params",
+        "InvMu_obs",
+        "LCDS",
     ]
     | MagFieldVarTypes
 )
@@ -96,30 +127,59 @@ GFZVarNames: TypeAlias = Literal[
     "B_eq",
     "B_sat",
     "B_total",
+    "ByIMF",
+    "BzIMF",
+    "Dst",
     "FEDO",
+    "FEDU_SA",
     "FEIU",
+    "FEIU_SA",
+    "FIDU",
+    "FIDU_SA",
     "FPDU",
+    "FPDU_SA",
     "Flux",
+    "G1",
+    "G2",
+    "G3",
     "InvK",
     "InvMu",
+    "InvMu_obs",
+    "Kp",
+    "LCDS",
     "Lm",
     "Lstar",
     "MLT",
     "MLT0",
     "MLat",
+    "Nsw",
     "PSD",
+    "Pdyn",
     "R0",
+    "Vsw",
+    "W_params",
+    "alpha_dlc",
+    "alpha_dlc_eq",
     "alpha_eq_model",
     "alpha_eq_range",
     "alpha_lc",
     "alpha_lc_eq",
     "alpha_local",
     "alpha_local_range",
+    "density_other",
+    "density_other_eq",
+    "density_scpot",
+    "density_scpot_eq",
+    "density_spectrogram",
+    "density_spectrogram_eq",
     "ellipticity",
     "energy_FEDO",
     "energy_FEIU",
+    "energy_FIDU",
     "energy_FPDU",
     "energy_channels",
+    "fce",
+    "fce_eq",
     "freq",
     "freq_bw",
     "geo_alt",
@@ -133,7 +193,7 @@ GFZVarNames: TypeAlias = Literal[
 ]
 """Variable names used by the GFZ output standard.
 
-Generated from `GFZStandard().variable_infos` by `scripts/generate_metadata_stubs.py`. Do not edit the
+Generated from `GFZStandard().variable_infos` by `hooks/generate_metadata_stubs.py`. Do not edit the
 generated block by hand; edit `el_paso/data_standards/gfz_standard.py` and regenerate instead.
 """
 
@@ -155,7 +215,7 @@ MagneticFieldLiteral: TypeAlias = Literal[
 """Supported magnetic-field model identifiers."""
 
 MagInputKeys: TypeAlias = Literal[
-    "Kp", "Dst", "dens", "velo", "Pdyn", "ByIMF", "BzIMF", "G1", "G2", "G3", "W1", "W2", "W3", "W4", "W5", "W6", "AL"
+    "Kp", "Dst", "Nsw", "Vsw", "Pdyn", "ByIMF", "BzIMF", "G1", "G2", "G3", "W1", "W2", "W3", "W4", "W5", "W6", "AL"
 ]
 MFSFormats: TypeAlias = Literal["nc", "cdf", "h5", "mat", ".nc", ".cdf", ".h5", ".mat"]
 """File formats supported by MonthlyRBStrategy."""
@@ -170,6 +230,10 @@ Either one of the built-in literals, or a custom callable (e.g. a generator func
 that takes the current time and returns the next file boundary time. Use a callable
 for cadences that don't fit a fixed interval, such as irregular weekly files.
 """
+
+VariablesDict: TypeAlias = dict[InternalName, Variable]
+"""Dictionary of `Variable` objects to save, keyed by internal variable name. The type of
+`save()`'s `variables_dict` parameter."""
 
 SavedDataDict: TypeAlias = dict[InternalName | Literal["metadata"], Any]
 """Dictionary passed to saving backends, keyed by internal variable name or metadata."""
@@ -220,6 +284,7 @@ class Recipe(Protocol):
         num_cores: int = ...,
         skip_existing: bool = ...,
         save_strategy: Any = ...,  # noqa: ANN401 (must be Any: see class docstring on contravariance)
+        save_indices_sw: bool = ...,
     ) -> None:
         """Process and save data for the interval from `start_time` to `end_time`."""
         ...
@@ -231,7 +296,8 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "GFZStandard": ("el_paso.data_standards.gfz_standard", "GFZStandard"),
     "GFZStrategy": ("el_paso.saving_strategies.gfz_strategy", "GFZStrategy"),
     "DataStandard": ("el_paso.data_standard", "DataStandard"),
-    "DensityNetCDFStrategy": ("el_paso.saving_strategies.density_netcdf_strategy", "DensityNetCDFStrategy"),
+    "MonthlyDensityStrategy": ("el_paso.saving_strategies.monthly_density_strategy", "MonthlyDensityStrategy"),
+    "RBSPDensityStrategy": ("el_paso.saving_strategies.rbsp_density_strategy", "RBSPDensityStrategy"),
     "MonthlyRBStrategy": ("el_paso.saving_strategies.monthly_rb_strategy", "MonthlyRBStrategy"),
     "DailyLEORBStrategy": ("el_paso.saving_strategies.daily_leo_rb_strategy", "DailyLEORBStrategy"),
     "OutputFile": ("el_paso.saving_strategy", "OutputFile"),
@@ -270,7 +336,6 @@ __all__ = [
     "DailyLEORBStrategy",
     "DailyWaveStrategy",
     "DataStandard",
-    "DensityNetCDFStrategy",
     "ExtractionInfo",
     "FileCadence",
     "FileLoader",
@@ -284,11 +349,13 @@ __all__ = [
     "MagFieldVarTypes",
     "MagInputKeys",
     "MagneticFieldLiteral",
+    "MonthlyDensityStrategy",
     "MonthlyRBStrategy",
     "OutputFile",
     "PRBEMMetaData",
     "PRBEMName",
     "PRBEMStandard",
+    "RBSPDensityStrategy",
     "Recipe",
     "SavedDataDict",
     "SavingStrategy",
@@ -299,4 +366,5 @@ __all__ = [
     "VariableInfo",
     "VariableMetadata",
     "VariableRequest",
+    "VariablesDict",
 ]

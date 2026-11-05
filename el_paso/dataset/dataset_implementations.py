@@ -35,41 +35,80 @@ class GFZDataSet(DataSet):
 
     Attribute names and descriptions (other than `datetime`, `P`, `InvV`, which are computed by
     `DataSet`) are generated from `GFZStandard().variable_infos` by
-    `scripts/generate_metadata_stubs.py`.
+    `hooks/generate_metadata_stubs.py`.
 
     Attributes:
         datetime (list[dt.datetime]): List of datetime objects corresponding to each time step.
         P (NDArray[np.float64]): Computed phase angle, derived from MLT.
         InvV (NDArray[np.float64]): Computed third adiabatic invariant, derived from InvK and InvMu.
-        # BEGIN GENERATED GFZ_DATASET_ATTRS DOCS
-        BB (NDArray[np.float64]): Frequency of the power spectral density.
+            <!-- BEGIN GENERATED GFZ_DATASET_ATTRS DOCS -->
+        BB (NDArray[np.float64]): Magnetic power spectral density of the observed waves.
         B_eq (NDArray[np.float64]): Calculated magnetic field at the equator.
         B_sat (NDArray[np.float64]): Observered magnetic field at the satellite location.
         B_total (NDArray[np.float64]): Calculated magnetic field at the satellite location.
+        ByIMF (NDArray[np.float64]): GSM y-component of the interplanetary magnetic field.
+        BzIMF (NDArray[np.float64]): GSM z-component of the interplanetary magnetic field.
+        Dst (NDArray[np.float64]): Disturbance storm time index.
         FEDO (NDArray[np.float64]): Electron differential omnidirectional flux.
+        FEDU_SA (NDArray[np.float64]): Electron differential flux, spin-averaged over the look directions (no pitch
+            angle resolution).
         FEIU (NDArray[np.float64]): Electron integral unidirectional flux.
+        FEIU_SA (NDArray[np.float64]): Electron integral flux, spin-averaged over the look directions (no pitch
+            angle resolution).
+        FIDU (NDArray[np.float64]): Ion (total, all species) differential unidirectional flux.
+        FIDU_SA (NDArray[np.float64]): Ion (total, all species) differential flux, spin-averaged over the look
+            directions (no pitch angle resolution).
         FPDU (NDArray[np.float64]): Proton differential unidirectional flux.
+        FPDU_SA (NDArray[np.float64]): Proton differential flux, spin-averaged over the look directions (no pitch
+            angle resolution).
         Flux (NDArray[np.float64]): Electron differential unidirectional flux.
+        G1 (NDArray[np.float64]): Tsyganenko G1 parameter.
+        G2 (NDArray[np.float64]): Tsyganenko G2 parameter.
+        G3 (NDArray[np.float64]): Tsyganenko G3 parameter.
         InvK (NDArray[np.float64]): Calculated modified second adiabatic invariant.
-        InvMu (NDArray[np.float64]): Calculated first adiabatic invariant.
+        InvMu (NDArray[np.float64]): Calculated first adiabatic invariant from modelled magnetic field.
+        InvMu_obs (NDArray[np.float64]): Calculated first adiabatic invariant from magnetic field observations.
+        Kp (NDArray[np.float64]): Planetary Kp geomagnetic index.
+        LCDS (NDArray[np.float64]): Last Closed Drift Shell.
         Lm (NDArray[np.float64]): Calculated Lm of the particles.
         Lstar (NDArray[np.float64]): Calculated Lstar of the particles.
         MLT (NDArray[np.float64]): Magnetic local time at the satellite location.
         MLT0 (NDArray[np.float64]): Magnetic local time at the mapped magnetic equator.
-        MLat (NDArray[np.float64]): Frequency of the power spectral density.
+        MLat (NDArray[np.float64]): Magnetic latitude of the satellite location.
+        Nsw (NDArray[np.float64]): Solar wind proton density.
         PSD (NDArray[np.float64]): Calculated phase space density of particles.
+        Pdyn (NDArray[np.float64]): Solar wind dynamic pressure.
         R0 (NDArray[np.float64]): Radial distance of the satellite location mapped to the equator.
+        Vsw (NDArray[np.float64]): Solar wind bulk speed.
+        W_params (NDArray[np.float64]): Tsyganenko-Sitnov W1-W6 parameters.
+        alpha_dlc (NDArray[np.float64]): Drift loss cone size at the satellite location.
+        alpha_dlc_eq (NDArray[np.float64]): Drift loss cone size at the satellite location mapped to the equator.
         alpha_eq_model (NDArray[np.float64]): Calculated equatorial pitch angles of the particles.
         alpha_eq_range (NDArray[np.float64]): Equatorial pitch angle ranges of the particles.
         alpha_lc (NDArray[np.float64]): Local loss cone size at the satellite location.
         alpha_lc_eq (NDArray[np.float64]): Local loss cone size at the satellite location mapped to the equator.
         alpha_local (NDArray[np.float64]): Local pitch angles of the particles.
         alpha_local_range (NDArray[np.float64]): Local pitch angle ranges of the particles.
+        density_other (NDArray[np.float64]): Electron number density at the satellite location, derived by other
+            methods.
+        density_other_eq (NDArray[np.float64]): Electron number density derived by other methods, mapped to the
+            magnetic equator.
+        density_scpot (NDArray[np.float64]): Electron number density at the satellite location, derived from the
+            spacecraft potential.
+        density_scpot_eq (NDArray[np.float64]): Electron number density derived from the spacecraft potential,
+            mapped to the magnetic equator.
+        density_spectrogram (NDArray[np.float64]): Electron number density at the satellite location, derived from
+            wave spectrograms.
+        density_spectrogram_eq (NDArray[np.float64]): Electron number density derived from wave spectrograms, mapped
+            to the magnetic equator.
         ellipticity (NDArray[np.float64]): Frequency of the power spectral density.
         energy_FEDO (NDArray[np.float64]): Central energy of measured omnidirecitonal flux.
         energy_FEIU (NDArray[np.float64]): Central energy of measured integral flux.
+        energy_FIDU (NDArray[np.float64]): Central energy of measured ion differential flux.
         energy_FPDU (NDArray[np.float64]): Central energy of measured proton differential flux.
         energy_channels (NDArray[np.float64]): Central energy of measured differential flux.
+        fce (NDArray[np.float64]): Electron gyrofrequency at the satellite location.
+        fce_eq (NDArray[np.float64]): Electron gyrofrequency mapped to the magnetic equator.
         freq (NDArray[np.float64]): Frequency of the power spectral density.
         freq_bw (NDArray[np.float64]): Frequency of the power spectral density.
         geo_alt (NDArray[np.float64]): Altitude in geographic cartesian coordinates.
@@ -79,7 +118,7 @@ class GFZDataSet(DataSet):
         time (NDArray[np.float64]): Time in MATLAB datenum format.
         wave_wna (NDArray[np.float64]): Frequency of the power spectral density.
         xGEO (NDArray[np.float64]): Position in geographic cartesian coordinates.
-        # END GENERATED GFZ_DATASET_ATTRS DOCS
+            <!-- END GENERATED GFZ_DATASET_ATTRS DOCS -->
     """
 
     datetime: list[dt.datetime]
@@ -90,30 +129,59 @@ class GFZDataSet(DataSet):
     B_eq: NDArray[np.float64]
     B_sat: NDArray[np.float64]
     B_total: NDArray[np.float64]
+    ByIMF: NDArray[np.float64]
+    BzIMF: NDArray[np.float64]
+    Dst: NDArray[np.float64]
     FEDO: NDArray[np.float64]
+    FEDU_SA: NDArray[np.float64]
     FEIU: NDArray[np.float64]
+    FEIU_SA: NDArray[np.float64]
+    FIDU: NDArray[np.float64]
+    FIDU_SA: NDArray[np.float64]
     FPDU: NDArray[np.float64]
+    FPDU_SA: NDArray[np.float64]
     Flux: NDArray[np.float64]
+    G1: NDArray[np.float64]
+    G2: NDArray[np.float64]
+    G3: NDArray[np.float64]
     InvK: NDArray[np.float64]
     InvMu: NDArray[np.float64]
+    InvMu_obs: NDArray[np.float64]
+    Kp: NDArray[np.float64]
+    LCDS: NDArray[np.float64]
     Lm: NDArray[np.float64]
     Lstar: NDArray[np.float64]
     MLT: NDArray[np.float64]
     MLT0: NDArray[np.float64]
     MLat: NDArray[np.float64]
+    Nsw: NDArray[np.float64]
     PSD: NDArray[np.float64]
+    Pdyn: NDArray[np.float64]
     R0: NDArray[np.float64]
+    Vsw: NDArray[np.float64]
+    W_params: NDArray[np.float64]
+    alpha_dlc: NDArray[np.float64]
+    alpha_dlc_eq: NDArray[np.float64]
     alpha_eq_model: NDArray[np.float64]
     alpha_eq_range: NDArray[np.float64]
     alpha_lc: NDArray[np.float64]
     alpha_lc_eq: NDArray[np.float64]
     alpha_local: NDArray[np.float64]
     alpha_local_range: NDArray[np.float64]
+    density_other: NDArray[np.float64]
+    density_other_eq: NDArray[np.float64]
+    density_scpot: NDArray[np.float64]
+    density_scpot_eq: NDArray[np.float64]
+    density_spectrogram: NDArray[np.float64]
+    density_spectrogram_eq: NDArray[np.float64]
     ellipticity: NDArray[np.float64]
     energy_FEDO: NDArray[np.float64]  # noqa: N815
     energy_FEIU: NDArray[np.float64]  # noqa: N815
+    energy_FIDU: NDArray[np.float64]  # noqa: N815
     energy_FPDU: NDArray[np.float64]  # noqa: N815
     energy_channels: NDArray[np.float64]
+    fce: NDArray[np.float64]
+    fce_eq: NDArray[np.float64]
     freq: NDArray[np.float64]
     freq_bw: NDArray[np.float64]
     geo_alt: NDArray[np.float64]
@@ -185,30 +253,57 @@ class PRBEMDataSet(DataSet):
     adiabatic invariants.
 
     Attribute names and descriptions (other than `datetime`) are generated from
-    `PRBEMStandard().variable_infos` by `scripts/generate_metadata_stubs.py`.
+    `PRBEMStandard().variable_infos` by `hooks/generate_metadata_stubs.py`.
 
     Attributes:
         datetime (list[dt.datetime]): List of datetime objects corresponding to each time step.
-        # BEGIN GENERATED PRBEM_DATASET_ATTRS DOCS
+            <!-- BEGIN GENERATED PRBEM_DATASET_ATTRS DOCS -->
         Alpha (NDArray[np.float64]): Local pitch angle the instrument is looking at
         Alpha_Eq (NDArray[np.float64]): Computed equatorial pitch angle the instrument is looking from Alpha, B_Calc
             and B_Eq
         B_Calc (NDArray[np.float64]): Calculated magnetic field strength at the spacecraft position
         B_Eq (NDArray[np.float64]): Calculated magnetic field strength at magnetic equator
+        B_total_obs (NDArray[np.float64]): Observed magnetic field strength at the spacecraft position
+        ByIMF (NDArray[np.float64]): GSM y-component of the interplanetary magnetic field.
+        BzIMF (NDArray[np.float64]): GSM z-component of the interplanetary magnetic field.
+        Dst (NDArray[np.float64]): Disturbance storm time index.
         Energy_FEDU (NDArray[np.float64]): Central energy of unidirectional differential electron flux
         Energy_FPDU (NDArray[np.float64]): Central energy of unidirectional differential proton flux
         Epoch (NDArray[np.float64]): Posix Time
         FEDU (NDArray[np.float64]): Processed unidirectional differential electron flux
         FPDU (NDArray[np.float64]): Processed unidirectional differential proton flux
+        G1 (NDArray[np.float64]): Tsyganenko G1 parameter.
+        G2 (NDArray[np.float64]): Tsyganenko G2 parameter.
+        G3 (NDArray[np.float64]): Tsyganenko G3 parameter.
         InvK (NDArray[np.float64]): Calculated modified second adiabatic invariant.
-        InvMu (NDArray[np.float64]): Calculated first adiabatic invariant.
+        InvMu (NDArray[np.float64]): Calculated first adiabatic invariant from modelled magnetic field.
+        InvMu_obs (NDArray[np.float64]): Calculated first adiabatic invariant from magnetic field observations.
+        Kp (NDArray[np.float64]): Planetary Kp geomagnetic index.
         L_m (NDArray[np.float64]): Calculated L McIlwain's L parameter
         L_star (NDArray[np.float64]): Calculated Roederer's L* parameter
         MLT (NDArray[np.float64]): Magnetic local time at the satellite location.
+        Nsw (NDArray[np.float64]): Solar wind proton density.
+        Number_density_other (NDArray[np.float64]): Electron number density at the satellite location, derived by
+            other methods.
+        Number_density_other_Eq (NDArray[np.float64]): Electron number density derived by other methods, mapped to
+            the magnetic equator.
+        Number_density_scpot (NDArray[np.float64]): Electron number density at the satellite location, derived from
+            the spacecraft potential.
+        Number_density_scpot_Eq (NDArray[np.float64]): Electron number density derived from the spacecraft
+            potential, mapped to the magnetic equator.
+        Number_density_spectrogram (NDArray[np.float64]): Electron number density at the satellite location, derived
+            from wave spectrograms.
+        Number_density_spectrogram_Eq (NDArray[np.float64]): Electron number density derived from wave spectrograms,
+            mapped to the magnetic equator.
         PSD (NDArray[np.float64]): Calculated phase space density of particles.
+        Pdyn (NDArray[np.float64]): Solar wind dynamic pressure.
         Position (NDArray[np.float64]): Spacecraft position in geographic cartesian coordinates
         R_Eq (NDArray[np.float64]): Radial distance of the satellite location mapped to the equator.
-        # END GENERATED PRBEM_DATASET_ATTRS DOCS
+        Vsw (NDArray[np.float64]): Solar wind bulk speed.
+        W_params (NDArray[np.float64]): Tsyganenko-Sitnov W1-W6 parameters.
+        xGEO_Eq (NDArray[np.float64]): Satellite position mapped to the magnetic equator, in geographic cartesian
+            coordinates.
+            <!-- END GENERATED PRBEM_DATASET_ATTRS DOCS -->
         metadata (PRBEMMetaData): Metadata container for all loaded variables.
     """
 
@@ -218,19 +313,39 @@ class PRBEMDataSet(DataSet):
     Alpha_Eq: NDArray[np.float64]
     B_Calc: NDArray[np.float64]
     B_Eq: NDArray[np.float64]
+    B_total_obs: NDArray[np.float64]
+    ByIMF: NDArray[np.float64]
+    BzIMF: NDArray[np.float64]
+    Dst: NDArray[np.float64]
     Energy_FEDU: NDArray[np.float64]
     Energy_FPDU: NDArray[np.float64]
     Epoch: NDArray[np.float64]
     FEDU: NDArray[np.float64]
     FPDU: NDArray[np.float64]
+    G1: NDArray[np.float64]
+    G2: NDArray[np.float64]
+    G3: NDArray[np.float64]
     InvK: NDArray[np.float64]
     InvMu: NDArray[np.float64]
+    InvMu_obs: NDArray[np.float64]
+    Kp: NDArray[np.float64]
     L_m: NDArray[np.float64]
     L_star: NDArray[np.float64]
     MLT: NDArray[np.float64]
+    Nsw: NDArray[np.float64]
+    Number_density_other: NDArray[np.float64]
+    Number_density_other_Eq: NDArray[np.float64]
+    Number_density_scpot: NDArray[np.float64]
+    Number_density_scpot_Eq: NDArray[np.float64]
+    Number_density_spectrogram: NDArray[np.float64]
+    Number_density_spectrogram_Eq: NDArray[np.float64]
     PSD: NDArray[np.float64]
+    Pdyn: NDArray[np.float64]
     Position: NDArray[np.float64]
     R_Eq: NDArray[np.float64]
+    Vsw: NDArray[np.float64]
+    W_params: NDArray[np.float64]
+    xGEO_Eq: NDArray[np.float64]  # noqa: N815
     # END GENERATED PRBEM_DATASET_ATTRS
     metadata: PRBEMMetaData
 

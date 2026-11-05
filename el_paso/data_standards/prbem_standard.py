@@ -8,7 +8,7 @@ from astropy import units as u
 
 import el_paso as ep
 from el_paso.data_standard import ConsistencyCheck, DataStandard, VariableInfo
-from el_paso.typing import PRBEMName
+from el_paso.typing import InternalName, PRBEMName
 
 logger = logging.getLogger("__name__")
 
@@ -27,7 +27,7 @@ class PRBEMStandard(DataStandard[PRBEMName]):
         """Initializes the PRBEMStandard with a ConsistencyCheck object."""
         self.consistency_check = ConsistencyCheck()
 
-        self.variable_infos: dict[str, VariableInfo[PRBEMName]] = {
+        self.variable_infos: dict[InternalName, VariableInfo[PRBEMName]] = {
             "Epoch": VariableInfo[PRBEMName]("Epoch", "Posix Time", ep.units.posixtime, dependencies=["Epoch"]),
             "FEDU": VariableInfo[PRBEMName](
                 "FEDU",
@@ -80,6 +80,12 @@ class PRBEMStandard(DataStandard[PRBEMName]):
                 u.nT,
                 dependencies=["Epoch"],
             ),
+            "B_total_obs": VariableInfo[PRBEMName](
+                "B_total_obs",
+                "Observed magnetic field strength at the spacecraft position",
+                u.nT,
+                dependencies=["Epoch"],
+            ),
             "L_m": VariableInfo[PRBEMName](
                 "L_m",
                 "Calculated L McIlwain's L parameter",
@@ -94,7 +100,13 @@ class PRBEMStandard(DataStandard[PRBEMName]):
             ),
             "InvMu": VariableInfo[PRBEMName](
                 "InvMu",
-                "Calculated first adiabatic invariant.",
+                "Calculated first adiabatic invariant from modelled magnetic field.",
+                u.MeV / u.G,
+                ["Epoch", ("Energy_FEDU", "Energy_FPDU"), "Alpha"],
+            ),
+            "InvMu_obs": VariableInfo[PRBEMName](
+                "InvMu_obs",
+                "Calculated first adiabatic invariant from magnetic field observations.",
                 u.MeV / u.G,
                 ["Epoch", ("Energy_FEDU", "Energy_FPDU"), "Alpha"],
             ),
@@ -111,4 +123,66 @@ class PRBEMStandard(DataStandard[PRBEMName]):
                 ["Epoch", ("Energy_FEDU", "Energy_FPDU"), "Alpha"],
             ),
             "MLT": VariableInfo[PRBEMName]("MLT", "Magnetic local time at the satellite location.", u.hour, ["Epoch"]),
+            "xGEO_Eq": VariableInfo[PRBEMName](
+                "xGEO_Eq",
+                "Satellite position mapped to the magnetic equator, in geographic cartesian coordinates.",
+                ep.units.RE,
+                ["Epoch", "Position_components"],
+            ),
+            "Number_density_scpot": VariableInfo[PRBEMName](
+                "Number_density_scpot",
+                "Electron number density at the satellite location, derived from the spacecraft potential.",
+                u.cm ** (-3),
+                ["Epoch"],
+            ),
+            "Number_density_scpot_Eq": VariableInfo[PRBEMName](
+                "Number_density_scpot_Eq",
+                "Electron number density derived from the spacecraft potential, mapped to the magnetic equator.",
+                u.cm ** (-3),
+                ["Epoch"],
+            ),
+            "Number_density_spectrogram": VariableInfo[PRBEMName](
+                "Number_density_spectrogram",
+                "Electron number density at the satellite location, derived from wave spectrograms.",
+                u.cm ** (-3),
+                ["Epoch"],
+            ),
+            "Number_density_spectrogram_Eq": VariableInfo[PRBEMName](
+                "Number_density_spectrogram_Eq",
+                "Electron number density derived from wave spectrograms, mapped to the magnetic equator.",
+                u.cm ** (-3),
+                ["Epoch"],
+            ),
+            "Number_density_other": VariableInfo[PRBEMName](
+                "Number_density_other",
+                "Electron number density at the satellite location, derived by other methods.",
+                u.cm ** (-3),
+                ["Epoch"],
+            ),
+            "Number_density_other_Eq": VariableInfo[PRBEMName](
+                "Number_density_other_Eq",
+                "Electron number density derived by other methods, mapped to the magnetic equator.",
+                u.cm ** (-3),
+                ["Epoch"],
+            ),
+            "Kp": VariableInfo[PRBEMName]("Kp", "Planetary Kp geomagnetic index.", u.dimensionless_unscaled, ["Epoch"]),
+            "Dst": VariableInfo[PRBEMName]("Dst", "Disturbance storm time index.", u.nT, ["Epoch"]),
+            "Pdyn": VariableInfo[PRBEMName]("Pdyn", "Solar wind dynamic pressure.", u.nPa, ["Epoch"]),
+            "ByIMF": VariableInfo[PRBEMName](
+                "ByIMF", "GSM y-component of the interplanetary magnetic field.", u.nT, ["Epoch"]
+            ),
+            "BzIMF": VariableInfo[PRBEMName](
+                "BzIMF", "GSM z-component of the interplanetary magnetic field.", u.nT, ["Epoch"]
+            ),
+            "Vsw": VariableInfo[PRBEMName]("Vsw", "Solar wind bulk speed.", u.km / u.s, ["Epoch"]),
+            "Nsw": VariableInfo[PRBEMName]("Nsw", "Solar wind proton density.", u.cm**-3, ["Epoch"]),
+            "G1": VariableInfo[PRBEMName]("G1", "Tsyganenko G1 parameter.", u.dimensionless_unscaled, ["Epoch"]),
+            "G2": VariableInfo[PRBEMName]("G2", "Tsyganenko G2 parameter.", u.dimensionless_unscaled, ["Epoch"]),
+            "G3": VariableInfo[PRBEMName]("G3", "Tsyganenko G3 parameter.", u.dimensionless_unscaled, ["Epoch"]),
+            "W_params": VariableInfo[PRBEMName](
+                "W_params",
+                "Tsyganenko-Sitnov W1-W6 parameters.",
+                u.dimensionless_unscaled,
+                ["Epoch", "W_components"],
+            ),
         }

@@ -4,14 +4,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import shutil
-from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
 
-import pytest
-
 import el_paso as ep
+import pytest
 from el_paso.dataset import GFZDataSet
 from el_paso.recipes.rbsp import process_rbsp_ect_combined
 
@@ -19,7 +17,7 @@ from el_paso.recipes.rbsp import process_rbsp_ect_combined
 @pytest.mark.parametrize(
     ("mag_field", "save_strategy"),
     [
-        pytest.param("T89", "gfz", marks=pytest.mark.basic),
+        pytest.param("T89", "gfz", marks=(pytest.mark.basic, pytest.mark.minimal)),
         pytest.param("T89", "netcdf", marks=pytest.mark.basic),
     ],
 )
@@ -27,11 +25,9 @@ def test_rbsp_ect_combined_snapshot(
     mag_field: Literal["T89", "TS04", "OP77", "T96"],
     save_strategy: Literal["gfz", "netcdf"],
     tmpdir: Path,
-    skip_if_unreachable: Callable[..., None],
     *,
     renew_solution: bool,
 ) -> None:
-    skip_if_unreachable("https://spdf.gsfc.nasa.gov")
 
     start_time = datetime(2017, 9, 8, tzinfo=timezone.utc)
     end_time = start_time + timedelta(days=0.4, seconds=-1)
@@ -92,9 +88,6 @@ def test_rbsp_ect_combined_snapshot(
             )
             assert out_path.exists()
 
-            if renew_solution:
-                shutil.copy(out_path, Path(__file__).parent / "data" / "processed" / "RBSP" / "rbspa")
-
             rbsp_proc = GFZDataSet(
                 start_time=start_time,
                 end_time=end_time,
@@ -108,6 +101,20 @@ def test_rbsp_ect_combined_snapshot(
                     file_format="nc",
                 ),
             )
+
+            if renew_solution:
+                # Copy every output file this strategy produces, so a strategy that later gains
+                # more output groups stays covered.
+                # get_file_path() needs the strategy's own rounded interval (full-month bounds for
+                # MonthlyRBStrategy), not the raw start_time/end_time, to compute the correct name.
+                dest_dir = Path(__file__).parent / "data" / "processed" / "RBSP" / "rbspa"
+                interval_start, interval_end = rbsp_proc.saving_strategy.get_time_intervals_to_save(
+                    start_time, end_time
+                )[0]
+                for output_file in rbsp_proc.saving_strategy.output_files:
+                    src_path = rbsp_proc.saving_strategy.get_file_path(interval_start, interval_end, output_file)
+                    if src_path.exists():
+                        shutil.copy(src_path, dest_dir)
 
             rbsp_true = GFZDataSet(
                 start_time=start_time,

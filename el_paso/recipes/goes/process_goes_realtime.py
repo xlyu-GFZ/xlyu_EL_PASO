@@ -1,5 +1,7 @@
 # SPDX-FileCopyrightText: 2025 GFZ Helmholtz Centre for Geosciences
+# SPDX-FileCopyrightText: 2026 GFZ Helmholtz Centre for Geosciences
 # SPDX-FileContributor: Bernhard Haas
+# SPDX-FileContributor: Sahil Jhawar
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -14,6 +16,7 @@ from numpy.typing import NDArray
 
 import el_paso as ep
 from el_paso.recipes.goes import GOESRealtimeSatellite
+from el_paso.recipes.solar_wind_indices.process_solar_wind_indices import process_solar_wind_indices
 from el_paso.utils import timed_function
 
 logging.captureWarnings(capture=True)
@@ -73,8 +76,11 @@ def process_goes_real_time(
     processed_data_path: str | Path = ".",
     bin_cadence: timedelta = timedelta(minutes=5),
     num_cores: int = 16,
-    save_strategy: Literal["gfz", "netcdf", "both"] = "netcdf",
+    save_strategy: Literal["gfz", "netcdf"] = "netcdf",
     skip_existing: bool = True,  # noqa: FBT001, FBT002,
+    *,
+    calculate_Lstar: bool = True,
+    save_indices_sw: bool = False,
 ) -> None:
     """Process GOES real-time differential electron flux data into pitch-angle resolved phase space densities.
 
@@ -97,10 +103,14 @@ def process_goes_real_time(
         processed_data_path (str | Path): Directory where the processed output files are saved.
         bin_cadence (timedelta): Time cadence used to bin the extracted variables.
         num_cores (int): Number of CPU cores used for the magnetic field computations.
-        save_strategy (Literal["gfz", "netcdf", "both"]): Strategy used to save the
-            processed data. "gfz" saves using the GFZ format, "netcdf" saves monthly NetCDF files,
-            and "both" saves using both strategies.
+        save_strategy (Literal["gfz", "netcdf"]): Strategy used to save the
+            processed data. "gfz" saves using the GFZ format, "netcdf" saves monthly NetCDF files.
         skip_existing (bool): If True, skip downloading files that already exist on disk.
+        calculate_Lstar (bool): If True, also compute the L* magnetic field quantity. If False, the
+            expensive drift-shell tracing is skipped and L* is not saved, while L_m and InvK are still
+            computed. Defaults to True.
+        save_indices_sw (bool): If True, also save all solar wind indices and parameters,
+            independent of this recipe's own output. Defaults to False.
     """
     # Part 1: specify source files to extract variables
     data_path_stem = f"{raw_data_path}/GOES/YYYY/MM/{satellite}/"
@@ -118,6 +128,8 @@ def process_goes_real_time(
         skip_existing=skip_existing,
     )
 
+    ep.exit_if_download_only()
+
     extraction_infos = [
         ep.ExtractionInfo(
             result_key="Epoch",
@@ -133,7 +145,7 @@ def process_goes_real_time(
         ep.ExtractionInfo(
             result_key="FEDO",
             name_or_column="flux",
-            unit=(u.cm**2 * u.s * u.keV) ** (-1),
+            unit=(u.cm**2 * u.s * u.sr * u.keV) ** (-1),
             dependent_variables=["time_tag", "energy"],
         ),
         ep.ExtractionInfo(
@@ -200,11 +212,19 @@ def process_goes_real_time(
         ("MLT", mag_field),
         ("R_Eq", mag_field),
         ("Alpha_Eq", mag_field),
-        ("L_star", mag_field),
         ("L_m", mag_field),
         ("InvMu", mag_field),
         ("InvK", mag_field),
     ]
+
+    if calculate_Lstar:
+        variables_to_compute.append(("L_star", mag_field))
+
+    irbem_options = ep.processing.magnetic_field_utils.IrbemOptions(
+        lstar_quantity=ep.processing.magnetic_field_utils.LstarQuantity.LSTAR
+        if calculate_Lstar
+        else ep.processing.magnetic_field_utils.LstarQuantity.NONE,
+    )
 
     magnetic_field_variables = ep.processing.compute_magnetic_field_variables(
         time_var=binned_time_var,
@@ -213,7 +233,7 @@ def process_goes_real_time(
         pa_local_var=variables["PA_local_FEDU"],
         particle_species="electron",
         variables_to_compute=variables_to_compute,
-        irbem_options=ep.processing.magnetic_field_utils.IrbemOptions(),
+        irbem_options=irbem_options,
         num_cores=num_cores,
     )
 
@@ -227,7 +247,7 @@ def process_goes_real_time(
 
     psd_var = ep.processing.compute_phase_space_density(FEDU_var, variables["Energy"], particle_species="electron")
 
-    vars_to_save: dict[ep.typing.InternalName, ep.Variable] = {
+    vars_to_save: ep.typing.VariablesDict = {
         "Epoch": binned_time_var,
         "FEDU": FEDU_var,
         "Position": variables["xGEO"],
@@ -236,7 +256,6 @@ def process_goes_real_time(
         "PSD": psd_var,
         "Alpha_Eq": magnetic_field_variables[f"Alpha_Eq_{mag_field}"],
         "MLT": magnetic_field_variables[f"MLT_{mag_field}"],
-        "L_star": magnetic_field_variables[f"L_star_{mag_field}"],
         "R_Eq": magnetic_field_variables[f"R_Eq_{mag_field}"],
         "B_Eq": magnetic_field_variables[f"B_Eq_{mag_field}"],
         "B_Calc": magnetic_field_variables[f"B_Calc_{mag_field}"],
@@ -244,13 +263,23 @@ def process_goes_real_time(
         "InvK": magnetic_field_variables[f"InvK_{mag_field}"],
     }
 
-    if save_strategy in ("gfz", "both"):
-        strategy = goes_realtime_gfz_strategy(processed_data_path, mag_field, satellite)
+    if calculate_Lstar:
+        vars_to_save["L_star"] = magnetic_field_variables[f"L_star_{mag_field}"]
 
-    if save_strategy in ("netcdf", "both"):
+    if save_strategy == "gfz":
+        strategy = goes_realtime_gfz_strategy(processed_data_path, mag_field, satellite)
+    else:
         strategy = goes_realtime_netcdf_strategy(processed_data_path, mag_field, satellite)
 
     ep.save(vars_to_save, strategy, start_time, end_time, time_var=binned_time_var, append=True)
+
+    if save_indices_sw:
+        process_solar_wind_indices(
+            start_time,
+            end_time,
+            processed_data_path=processed_data_path,
+            bin_cadence=bin_cadence,
+        )
 
 
 CLI_DEFAULTS = {

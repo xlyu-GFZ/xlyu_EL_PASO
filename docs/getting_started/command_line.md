@@ -15,7 +15,13 @@ el-paso list                      # show every available recipe
 el-paso poes meped --help         # options for one recipe
 el-paso poes meped --start-time 2013-03-16 --end-time 2013-03-16T23:59:59
 ```
-<img width="1200" height="682" alt="el_paso_recipe" src="https://github.com/user-attachments/assets/1903bc32-eea6-41a0-8bf2-e48c4d9dcba9" />
+
+```asciinema-player
+{
+    "file": "../../figures/ep.cast",
+    "auto_play": true
+}
+```
 
 A recipe can equally be run as a module, which is useful inside job scripts:
 
@@ -33,7 +39,7 @@ recipe function's own signature.
 | Option | Meaning |
 | --- | --- |
 | `--start-time`, `--end-time` | Processing time range. Anything `dateutil` understands, e.g. `2013-03-16` or `2013-03-16T23:59:59`. Naive values are read as UTC. |
-| `--satellite` | Which spacecraft to process. Repeat the option to process several in one run. |
+| `--satellite` | Which spacecraft to process. Repeat the option to process several in one run, or pass `all` for every spacecraft the recipe supports. |
 | `--mag-field` | Magnetic field model used for the derived quantities, e.g. `T89`, `T96`, `TS04`. |
 | `--bin-cadence` | Time binning cadence: `10s`, `5min`, `1h`, `2d`. A bare number means seconds. |
 | `--raw-data-path` | Where raw files are downloaded to and read from. |
@@ -58,6 +64,19 @@ el-paso rbsp mageis-electrons \
     --start-time 2017-10-15 --end-time 2017-10-15T23:59:59 \
     --satellite a --satellite b --mag-field TS04
 ```
+
+`--satellite all` runs the recipe for every spacecraft it supports, e.g. `goes16` to
+`goes19` for `el-paso goes mps-high`:
+
+```bash
+el-paso goes mps-high \
+    --start-time 2023-10-01 --end-time 2023-10-31T23:59:59 \
+    --satellite all
+```
+
+When several satellites are processed, a satellite that fails (for example because it
+has no data in the time range) does not stop the others. The run continues, logs which
+satellites failed, and exits with code 1 at the end.
 
 ## What a run reports
 

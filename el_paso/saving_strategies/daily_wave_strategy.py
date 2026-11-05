@@ -74,13 +74,16 @@ class DailyWaveStrategy(SavingStrategy):
         return [
             "Epoch",
             "Wave_frequency",
-            "Number_density",
+            # whichever density type the recipe provides
+            ("Number_density_scpot", "Number_density_spectrogram", "Number_density_other"),
             "Wave_ellipticity",
             "Wave_normal_angle",
             "Wave_planarity",
             "Magnetic_Power_Spectral_Density",
             "Wave_frequency_bandwidth",
             "B_total_obs",
+            "f_ce",
+            "f_ce_Eq",
             "MLat",
             "R_Eq",
             "MLT",

@@ -66,17 +66,36 @@ class GFZStandard(DataStandard[GFZVarNames]):
                 ["Epoch", "Energy_FPDU"],
                 ("Energy_FPDU", "ascending"),
             ),
+            "Energy_FIDU": VariableInfo[GFZVarNames](
+                "energy_FIDU",
+                "Central energy of measured ion differential flux.",
+                u.MeV,
+                ["Epoch", "Energy_FIDU"],
+                ("Energy_FIDU", "ascending"),
+            ),
             "FEDU": VariableInfo[GFZVarNames](
                 "Flux",
                 "Electron differential unidirectional flux.",
                 (u.cm**2 * u.s * u.sr * u.keV) ** (-1),
                 ["Epoch", "Energy_FEDU", "Alpha"],
             ),
+            "FEDU_SA": VariableInfo[GFZVarNames](
+                "FEDU_SA",
+                "Electron differential flux, spin-averaged over the look directions (no pitch angle resolution).",
+                (u.cm**2 * u.s * u.sr * u.keV) ** (-1),
+                ["Epoch", "Energy_FEDU"],
+            ),
             "FEIU": VariableInfo[GFZVarNames](
                 "FEIU",
                 "Electron integral unidirectional flux.",
                 (u.cm**2 * u.s * u.sr) ** (-1),
                 ["Epoch", "Energy_FEIU", "Alpha"],
+            ),
+            "FEIU_SA": VariableInfo[GFZVarNames](
+                "FEIU_SA",
+                "Electron integral flux, spin-averaged over the look directions (no pitch angle resolution).",
+                (u.cm**2 * u.s * u.sr) ** (-1),
+                ["Epoch", "Energy_FEIU"],
             ),
             "FEDO": VariableInfo[GFZVarNames](
                 "FEDO",
@@ -89,6 +108,25 @@ class GFZStandard(DataStandard[GFZVarNames]):
                 "Proton differential unidirectional flux.",
                 (u.cm**2 * u.s * u.sr * u.keV) ** (-1),
                 ["Epoch", "Energy_FPDU", "Alpha"],
+            ),
+            "FPDU_SA": VariableInfo[GFZVarNames](
+                "FPDU_SA",
+                "Proton differential flux, spin-averaged over the look directions (no pitch angle resolution).",
+                (u.cm**2 * u.s * u.sr * u.keV) ** (-1),
+                ["Epoch", "Energy_FPDU"],
+            ),
+            "FIDU": VariableInfo[GFZVarNames](
+                "FIDU",
+                "Ion (total, all species) differential unidirectional flux.",
+                (u.cm**2 * u.s * u.sr * u.keV) ** (-1),
+                ["Epoch", "Energy_FIDU", "Alpha"],
+            ),
+            "FIDU_SA": VariableInfo[GFZVarNames](
+                "FIDU_SA",
+                "Ion (total, all species) differential flux, spin-averaged over the look directions (no pitch angle "
+                "resolution).",
+                (u.cm**2 * u.s * u.sr * u.keV) ** (-1),
+                ["Epoch", "Energy_FIDU"],
             ),
             "Alpha": VariableInfo[GFZVarNames](
                 "alpha_local",
@@ -123,6 +161,15 @@ class GFZStandard(DataStandard[GFZVarNames]):
                 u.radian,
                 ["Epoch"],
             ),
+            "Alpha_DLC": VariableInfo[GFZVarNames](
+                "alpha_dlc", "Drift loss cone size at the satellite location.", u.radian, ["Epoch"]
+            ),
+            "Alpha_DLC_Eq": VariableInfo[GFZVarNames](
+                "alpha_dlc_eq",
+                "Drift loss cone size at the satellite location mapped to the equator.",
+                u.radian,
+                ["Epoch"],
+            ),
             "PSD": VariableInfo[GFZVarNames](
                 "PSD",
                 "Calculated phase space density of particles.",
@@ -153,7 +200,13 @@ class GFZStandard(DataStandard[GFZVarNames]):
             ),
             "InvMu": VariableInfo[GFZVarNames](
                 "InvMu",
-                "Calculated first adiabatic invariant.",
+                "Calculated first adiabatic invariant from modelled magnetic field.",
+                u.MeV / u.G,
+                ["Epoch", ("Energy_FEDU", "Energy_FPDU"), "Alpha"],
+            ),
+            "InvMu_obs": VariableInfo[GFZVarNames](
+                "InvMu_obs",
+                "Calculated first adiabatic invariant from magnetic field observations.",
                 u.MeV / u.G,
                 ["Epoch", ("Energy_FEDU", "Energy_FPDU"), "Alpha"],
             ),
@@ -188,8 +241,80 @@ class GFZStandard(DataStandard[GFZVarNames]):
             "Wave_normal_angle": VariableInfo[GFZVarNames](
                 "wave_wna", "Frequency of the power spectral density.", u.degree, ["Epoch", "Wave_frequency"]
             ),
-            "MLat": VariableInfo[GFZVarNames]("MLat", "Frequency of the power spectral density.", u.degree, ["Epoch"]),
+            "MLat": VariableInfo[GFZVarNames](
+                "MLat", "Magnetic latitude of the satellite location.", u.degree, ["Epoch"]
+            ),
+            "Kp": VariableInfo[GFZVarNames](
+                "Kp", "Planetary Kp geomagnetic index.", u.dimensionless_unscaled, ["Epoch"]
+            ),
+            "Dst": VariableInfo[GFZVarNames]("Dst", "Disturbance storm time index.", u.nT, ["Epoch"]),
+            "Pdyn": VariableInfo[GFZVarNames]("Pdyn", "Solar wind dynamic pressure.", u.nPa, ["Epoch"]),
+            "ByIMF": VariableInfo[GFZVarNames](
+                "ByIMF", "GSM y-component of the interplanetary magnetic field.", u.nT, ["Epoch"]
+            ),
+            "BzIMF": VariableInfo[GFZVarNames](
+                "BzIMF", "GSM z-component of the interplanetary magnetic field.", u.nT, ["Epoch"]
+            ),
+            "Vsw": VariableInfo[GFZVarNames]("Vsw", "Solar wind bulk speed.", u.km / u.s, ["Epoch"]),
+            "Nsw": VariableInfo[GFZVarNames]("Nsw", "Solar wind proton density.", u.cm**-3, ["Epoch"]),
+            "G1": VariableInfo[GFZVarNames]("G1", "Tsyganenko G1 parameter.", u.dimensionless_unscaled, ["Epoch"]),
+            "G2": VariableInfo[GFZVarNames]("G2", "Tsyganenko G2 parameter.", u.dimensionless_unscaled, ["Epoch"]),
+            "G3": VariableInfo[GFZVarNames]("G3", "Tsyganenko G3 parameter.", u.dimensionless_unscaled, ["Epoch"]),
+            "W_params": VariableInfo[GFZVarNames](
+                "W_params",
+                "Tsyganenko-Sitnov W1-W6 parameters.",
+                u.dimensionless_unscaled,
+                ["Epoch", "W_components"],
+            ),
             "Magnetic_Power_Spectral_Density": VariableInfo[GFZVarNames](
-                "BB", "Frequency of the power spectral density.", u.dimensionless_unscaled, ["Epoch", "Wave_frequency"]
+                "BB",
+                "Magnetic power spectral density of the observed waves.",
+                (u.nT) ** 2 / u.Hz,
+                ["Epoch", "Wave_frequency"],
+            ),
+            "f_ce": VariableInfo[GFZVarNames](
+                "fce", "Electron gyrofrequency at the satellite location.", u.Hz, ["Epoch"]
+            ),
+            "f_ce_Eq": VariableInfo[GFZVarNames](
+                "fce_eq", "Electron gyrofrequency mapped to the magnetic equator.", u.Hz, ["Epoch"]
+            ),
+            "Number_density_scpot": VariableInfo[GFZVarNames](
+                "density_scpot",
+                "Electron number density at the satellite location, derived from the spacecraft potential.",
+                u.cm ** (-3),
+                ["Epoch"],
+            ),
+            "Number_density_scpot_Eq": VariableInfo[GFZVarNames](
+                "density_scpot_eq",
+                "Electron number density derived from the spacecraft potential, mapped to the magnetic equator.",
+                u.cm ** (-3),
+                ["Epoch"],
+            ),
+            "Number_density_spectrogram": VariableInfo[GFZVarNames](
+                "density_spectrogram",
+                "Electron number density at the satellite location, derived from wave spectrograms.",
+                u.cm ** (-3),
+                ["Epoch"],
+            ),
+            "Number_density_spectrogram_Eq": VariableInfo[GFZVarNames](
+                "density_spectrogram_eq",
+                "Electron number density derived from wave spectrograms, mapped to the magnetic equator.",
+                u.cm ** (-3),
+                ["Epoch"],
+            ),
+            "Number_density_other": VariableInfo[GFZVarNames](
+                "density_other",
+                "Electron number density at the satellite location, derived by other methods.",
+                u.cm ** (-3),
+                ["Epoch"],
+            ),
+            "Number_density_other_Eq": VariableInfo[GFZVarNames](
+                "density_other_eq",
+                "Electron number density derived by other methods, mapped to the magnetic equator.",
+                u.cm ** (-3),
+                ["Epoch"],
+            ),
+            "LCDS": VariableInfo[GFZVarNames](
+                "LCDS", "Last Closed Drift Shell.", u.dimensionless_unscaled, ["Epoch", "Alpha"]
             ),
         }

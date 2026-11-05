@@ -1,5 +1,7 @@
 # SPDX-FileCopyrightText: 2025 GFZ Helmholtz Centre for Geosciences
+# SPDX-FileCopyrightText: 2026 GFZ Helmholtz Centre for Geosciences
 # SPDX-FileContributor: Bernhard Haas
+# SPDX-FileContributor: Sahil Jhawar
 #
 # SPDX-License-Identifier: Apache-2.0
 import logging
@@ -13,6 +15,7 @@ from astropy import units as u
 from dotenv import load_dotenv
 
 import el_paso as ep
+from el_paso.recipes.solar_wind_indices.process_solar_wind_indices import process_solar_wind_indices
 from el_paso.utils import timed_function
 
 CHI2_BAD_QUALITY_THRESHOLD = 2
@@ -58,8 +61,10 @@ def process_ept_proton_fluxes(
     num_cores: int = 16,
     client_id: str | None = None,
     client_secret: str | None = None,
-    save_strategy: typing.Literal["gfz", "netcdf", "both"] = "netcdf",
+    save_strategy: typing.Literal["gfz", "netcdf"] = "netcdf",
     skip_existing: bool = True,  # noqa: FBT001, FBT002,
+    *,
+    save_indices_sw: bool = False,
 ) -> None:
     """Process PROBA-V EPT proton flux data into pitch-angle-resolved fluxes with magnetic field coordinates.
 
@@ -88,9 +93,11 @@ def process_ept_proton_fluxes(
             from the `CLIENT_ID` environment variable.
         client_secret (str | None): Client secret for the ESA SWE authentication. If None, it
             is read from the `CLIENT_SECRET` environment variable.
-        save_strategy (typing.Literal["gfz", "netcdf", "both"]): Which saving strategy (or
+        save_strategy (typing.Literal["gfz", "netcdf"]): Which saving strategy (or
             strategies) to use for the processed output.
         skip_existing (bool): If True, skip downloading files that already exist locally.
+        save_indices_sw (bool): If True, also save all solar wind indices and parameters,
+            independent of this recipe's own output. Defaults to False.
 
     Raises:
         ValueError: If `client_id` or `client_secret` is not provided and not available via the
@@ -128,6 +135,8 @@ def process_ept_proton_fluxes(
         authentication_info=(client_id, client_secret),
         skip_existing=skip_existing,
     )
+
+    ep.exit_if_download_only()
 
     flux_unit = typing.cast("u.Unit", (u.cm**2 * u.s * u.sr * u.MeV) ** (-1))
 
@@ -282,7 +291,7 @@ def process_ept_proton_fluxes(
 
     variables |= magnetic_field_variables
 
-    variables_to_save: dict[ep.typing.InternalName, ep.Variable] = {
+    variables_to_save: ep.typing.VariablesDict = {
         "Epoch": binned_time_var,
         "FPDU": variables["FPDU"],
         "Energy_FPDU": variables["Energy_FPDU"],
@@ -296,12 +305,21 @@ def process_ept_proton_fluxes(
         "Position": variables["xGEO"],
     }
 
-    if save_strategy in ("gfz", "both"):
+    if save_strategy == "gfz":
         strategy = probav_ept_proton_gfz_strategy(processed_data_path, mag_field)
 
-    if save_strategy in ("netcdf", "both"):
+    else:
         strategy = probav_ept_proton_netcdf_strategy(processed_data_path, mag_field)
+
     ep.save(variables_to_save, strategy, start_time, end_time, time_var=binned_time_var, append=True)
+
+    if save_indices_sw:
+        process_solar_wind_indices(
+            start_time,
+            end_time,
+            processed_data_path=processed_data_path,
+            bin_cadence=bin_cadence,
+        )
 
 
 if __name__ == "__main__":

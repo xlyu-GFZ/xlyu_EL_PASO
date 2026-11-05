@@ -6,16 +6,16 @@
 
 from typing import TYPE_CHECKING
 
+import el_paso as ep
 import numpy as np
 import pytest
 from astropy import units as u
-
-import el_paso as ep
 
 if TYPE_CHECKING:
     from el_paso.processing.interpolate_in_time import InterpolationMethod
 
 
+@pytest.mark.minimal
 @pytest.mark.basic
 def test_interpolate_max_gap_seconds():
     orig_times = np.asarray([0.0, 2.0, 10.0, 12.0])
@@ -48,6 +48,7 @@ def test_interpolate_max_gap_seconds():
     assert np.isclose(result_data[2], 11.0)
 
 
+@pytest.mark.minimal
 @pytest.mark.basic
 def test_interpolate_nan_gaps():
     orig_times = np.asarray([0.0, 1.0, 2.0, 3.0])
@@ -79,6 +80,7 @@ def test_interpolate_nan_gaps():
     assert np.isclose(result_data[2], 35.0)
 
 
+@pytest.mark.minimal
 @pytest.mark.basic
 def test_interpolate_exact_matches_are_protected():
     orig_times = np.asarray([0.0, 10.0, 20.0])

@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2026 GFZ Helmholtz Centre for Geosciences
 # SPDX-FileContributor: Bernhard Haas
+# SPDX-FileContributor: Sahil Jhawar
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -51,7 +52,7 @@ from rich.table import Table
 # call time. This module is imported from `el_paso/__init__.py`, so binding the module
 # object here (rather than any of its attributes) keeps that import cycle safe.
 import el_paso as ep
-from el_paso.utils import enforce_utc_timezone
+from el_paso.cache import mark_run_failed
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -71,6 +72,9 @@ LOOP_PARAMETER_NAMES = frozenset({"satellite"})
 Every recipe names its spacecraft parameter ``satellite``. Pass ``loop_over`` to
 :func:`build_recipe_command` to loop over a differently named parameter.
 """
+
+ALL_VALUES = "all"
+"""Value of a looped choice parameter that stands for all of its choices, e.g. ``--satellite all``."""
 
 _UNIVERSAL_PARAMETER_NAMES = (
     "verbose",
@@ -160,6 +164,10 @@ def parse_datetime(value: str | datetime) -> datetime:
     Returns:
         datetime: The parsed, timezone-aware datetime.
     """
+    # Local import: `el_paso.utils` pulls in pandas, xarray, h5py and
+    # netCDF4, which the CLI should not pay for just to parse a date.
+    from el_paso.utils import enforce_utc_timezone  # noqa: PLC0415
+
     if isinstance(value, datetime):
         return enforce_utc_timezone(value)
 
@@ -277,6 +285,9 @@ class _ParameterSpec(typing.NamedTuple):
     default: Any
     choice_enum: type[enum.Enum] | None
     is_loop: bool
+    is_list: bool = False
+    loop_values: tuple[str, ...] | None = None
+    """The values ``all`` expands to, for looped choice parameters."""
 
 
 def _option_names(name: str, *, is_flag: bool) -> list[str]:
@@ -322,11 +333,17 @@ def _build_parameter_spec(  # noqa: PLR0911
 
     choices = _literal_choices(inner_hint)
     if choices is not None:
+        loop_values = None
+        if is_loop and ALL_VALUES not in choices:
+            # a looped choice also accepts `all`, which runs the recipe once per member
+            loop_values = choices
+            choices = (*choices, ALL_VALUES)
+            help_text = f"{help_text} Use '{ALL_VALUES}' for every value: {', '.join(loop_values)}.".strip()
         choice_enum = _make_choice_enum(name, choices)
         option = typer.Option(*_option_names(name, is_flag=False), help=help_text)
         # The enum is created at runtime, so the annotation has to be assembled dynamically.
         annotation = Annotated[list[choice_enum], option] if is_loop else Annotated[choice_enum, option]  # ty:ignore[invalid-type-form]
-        return _ParameterSpec(name, annotation, default, choice_enum, is_loop=is_loop)
+        return _ParameterSpec(name, annotation, default, choice_enum, is_loop=is_loop, loop_values=loop_values)
 
     if _is_path_hint(inner_hint):
         option = typer.Option(*_option_names(name, is_flag=False), help=help_text)
@@ -335,6 +352,17 @@ def _build_parameter_spec(  # noqa: PLR0911
     if inner_hint is bool:
         option = typer.Option(*_option_names(name, is_flag=True), help=help_text)
         return _ParameterSpec(name, Annotated[bool, option], default, None, is_loop=False)
+
+    if get_origin(inner_hint) is list:
+        item_hints = get_args(inner_hint)
+        if len(item_hints) == 1 and item_hints[0] in (int, float, str):
+            option = typer.Option(*_option_names(name, is_flag=False), help=help_text)
+            # A list parameter already takes several values, so it is repeated rather than looped:
+            # `--alpha-eq 10 --alpha-eq 90` is one call with two pitch angles, not two calls.
+            annotation = Annotated[list[item_hints[0]], option]  # ty: ignore[invalid-type-form]
+            return _ParameterSpec(name, annotation, default, None, is_loop=False, is_list=True)
+
+        return None
 
     if inner_hint in (int, float, str):
         option = typer.Option(*_option_names(name, is_flag=False), help=help_text)
@@ -440,6 +468,8 @@ def _make_command(
     """Assemble the wrapper callable and attach the synthesised signature."""
     choice_enums = {spec.name: spec.choice_enum for spec in specs if spec.choice_enum is not None}
     loop_names = [spec.name for spec in specs if spec.is_loop]
+    list_names = [spec.name for spec in specs if spec.is_list]
+    loop_values = {spec.name: spec.loop_values for spec in specs if spec.loop_values is not None}
 
     def command(**kwargs: Any) -> None:  # noqa: ANN401
         # The universal options belong to the command, not to the recipe, so they are
@@ -461,9 +491,23 @@ def _make_command(
             elif isinstance(value, list):
                 kwargs[name] = [item.value if isinstance(item, choice_enum) else item for item in value]
 
+        # `all` stands for every choice of a looped parameter, e.g. `--satellite all`
+        for name, values in loop_values.items():
+            selected = kwargs.get(name)
+            if isinstance(selected, list) and ALL_VALUES in selected:
+                kwargs[name] = list(values)
+
+        # Typer hands back a tuple for options that take several values; recipes annotate them
+        # as lists.
+        for name in list_names:
+            value = kwargs.get(name)
+            if isinstance(value, tuple):
+                kwargs[name] = list(value)
+
         kwargs.update(skipped)
 
         calls = _expand_loops(kwargs, loop_names)
+        failed_calls: list[str] = []
 
         for index, call_kwargs in enumerate(calls, start=1):
             # Fails loudly if the generated command ever drifts from the recipe signature.
@@ -482,12 +526,27 @@ def _make_command(
                 counter = f" ({index}/{len(calls)})" if len(calls) > 1 else ""
                 _report_call(func, call_kwargs, title_suffix=counter, dry_run=dry_run)
 
-            if not dry_run:
-                try:
-                    func(**call_kwargs)
-                except Exception:
-                    logger.exception(f"{_func_name(func)} failed.")
-                    raise typer.Exit(code=1) from None
+            if dry_run:
+                continue
+
+            # A failing call does not stop the remaining looped calls; the run fails at the end.
+            call_label = ", ".join(f"{name}={call_kwargs[name]}" for name in loop_names) or _func_name(func)
+            try:
+                func(**call_kwargs)
+            except SystemExit as exit_signal:
+                # `ep.exit_if_download_only` ends a call with code 0 once its downloads are done
+                if exit_signal.code not in (0, None):
+                    logger.exception(f"{_func_name(func)} ({call_label}) exited with code {exit_signal.code}.")
+                    failed_calls.append(call_label)
+            except Exception:
+                logger.exception(f"{_func_name(func)} ({call_label}) failed.")
+                failed_calls.append(call_label)
+
+        if failed_calls:
+            mark_run_failed()
+            if len(calls) > 1:
+                logger.error(f"{len(failed_calls)} of {len(calls)} calls failed: {'; '.join(failed_calls)}")
+            raise typer.Exit(code=1)
 
     parameters = [
         inspect.Parameter(

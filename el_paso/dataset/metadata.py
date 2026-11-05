@@ -139,39 +139,77 @@ class GFZMetaData(DatasetMetadata):
     """Metadata container for GFZStandard.
 
     Attribute names and descriptions are generated from `GFZStandard().variable_infos` by
-    `scripts/generate_metadata_stubs.py`; `datetime` is a computed extra added by `DataSet`.
+    `hooks/generate_metadata_stubs.py`; `datetime` is a computed extra added by `DataSet`.
 
     Attributes:
         datetime (VariableMetadata): Metadata for the computed `datetime` variable.
-        # BEGIN GENERATED GFZ_METADATA_ATTRS DOCS
-        BB (VariableMetadata): Frequency of the power spectral density.
+            <!-- BEGIN GENERATED GFZ_METADATA_ATTRS DOCS -->
+        BB (VariableMetadata): Magnetic power spectral density of the observed waves.
         B_eq (VariableMetadata): Calculated magnetic field at the equator.
         B_sat (VariableMetadata): Observered magnetic field at the satellite location.
         B_total (VariableMetadata): Calculated magnetic field at the satellite location.
+        ByIMF (VariableMetadata): GSM y-component of the interplanetary magnetic field.
+        BzIMF (VariableMetadata): GSM z-component of the interplanetary magnetic field.
+        Dst (VariableMetadata): Disturbance storm time index.
         FEDO (VariableMetadata): Electron differential omnidirectional flux.
+        FEDU_SA (VariableMetadata): Electron differential flux, spin-averaged over the look directions (no pitch
+            angle resolution).
         FEIU (VariableMetadata): Electron integral unidirectional flux.
+        FEIU_SA (VariableMetadata): Electron integral flux, spin-averaged over the look directions (no pitch angle
+            resolution).
+        FIDU (VariableMetadata): Ion (total, all species) differential unidirectional flux.
+        FIDU_SA (VariableMetadata): Ion (total, all species) differential flux, spin-averaged over the look
+            directions (no pitch angle resolution).
         FPDU (VariableMetadata): Proton differential unidirectional flux.
+        FPDU_SA (VariableMetadata): Proton differential flux, spin-averaged over the look directions (no pitch angle
+            resolution).
         Flux (VariableMetadata): Electron differential unidirectional flux.
+        G1 (VariableMetadata): Tsyganenko G1 parameter.
+        G2 (VariableMetadata): Tsyganenko G2 parameter.
+        G3 (VariableMetadata): Tsyganenko G3 parameter.
         InvK (VariableMetadata): Calculated modified second adiabatic invariant.
-        InvMu (VariableMetadata): Calculated first adiabatic invariant.
+        InvMu (VariableMetadata): Calculated first adiabatic invariant from modelled magnetic field.
+        InvMu_obs (VariableMetadata): Calculated first adiabatic invariant from magnetic field observations.
+        Kp (VariableMetadata): Planetary Kp geomagnetic index.
+        LCDS (VariableMetadata): Last Closed Drift Shell.
         Lm (VariableMetadata): Calculated Lm of the particles.
         Lstar (VariableMetadata): Calculated Lstar of the particles.
         MLT (VariableMetadata): Magnetic local time at the satellite location.
         MLT0 (VariableMetadata): Magnetic local time at the mapped magnetic equator.
-        MLat (VariableMetadata): Frequency of the power spectral density.
+        MLat (VariableMetadata): Magnetic latitude of the satellite location.
+        Nsw (VariableMetadata): Solar wind proton density.
         PSD (VariableMetadata): Calculated phase space density of particles.
+        Pdyn (VariableMetadata): Solar wind dynamic pressure.
         R0 (VariableMetadata): Radial distance of the satellite location mapped to the equator.
+        Vsw (VariableMetadata): Solar wind bulk speed.
+        W_params (VariableMetadata): Tsyganenko-Sitnov W1-W6 parameters.
+        alpha_dlc (VariableMetadata): Drift loss cone size at the satellite location.
+        alpha_dlc_eq (VariableMetadata): Drift loss cone size at the satellite location mapped to the equator.
         alpha_eq_model (VariableMetadata): Calculated equatorial pitch angles of the particles.
         alpha_eq_range (VariableMetadata): Equatorial pitch angle ranges of the particles.
         alpha_lc (VariableMetadata): Local loss cone size at the satellite location.
         alpha_lc_eq (VariableMetadata): Local loss cone size at the satellite location mapped to the equator.
         alpha_local (VariableMetadata): Local pitch angles of the particles.
         alpha_local_range (VariableMetadata): Local pitch angle ranges of the particles.
+        density_other (VariableMetadata): Electron number density at the satellite location, derived by other methods.
+        density_other_eq (VariableMetadata): Electron number density derived by other methods, mapped to the
+            magnetic equator.
+        density_scpot (VariableMetadata): Electron number density at the satellite location, derived from the
+            spacecraft potential.
+        density_scpot_eq (VariableMetadata): Electron number density derived from the spacecraft potential, mapped
+            to the magnetic equator.
+        density_spectrogram (VariableMetadata): Electron number density at the satellite location, derived from wave
+            spectrograms.
+        density_spectrogram_eq (VariableMetadata): Electron number density derived from wave spectrograms, mapped to
+            the magnetic equator.
         ellipticity (VariableMetadata): Frequency of the power spectral density.
         energy_FEDO (VariableMetadata): Central energy of measured omnidirecitonal flux.
         energy_FEIU (VariableMetadata): Central energy of measured integral flux.
+        energy_FIDU (VariableMetadata): Central energy of measured ion differential flux.
         energy_FPDU (VariableMetadata): Central energy of measured proton differential flux.
         energy_channels (VariableMetadata): Central energy of measured differential flux.
+        fce (VariableMetadata): Electron gyrofrequency at the satellite location.
+        fce_eq (VariableMetadata): Electron gyrofrequency mapped to the magnetic equator.
         freq (VariableMetadata): Frequency of the power spectral density.
         freq_bw (VariableMetadata): Frequency of the power spectral density.
         geo_alt (VariableMetadata): Altitude in geographic cartesian coordinates.
@@ -181,7 +219,7 @@ class GFZMetaData(DatasetMetadata):
         time (VariableMetadata): Time in MATLAB datenum format.
         wave_wna (VariableMetadata): Frequency of the power spectral density.
         xGEO (VariableMetadata): Position in geographic cartesian coordinates.
-        # END GENERATED GFZ_METADATA_ATTRS DOCS
+            <!-- END GENERATED GFZ_METADATA_ATTRS DOCS -->
     """
 
     datetime: VariableMetadata
@@ -190,30 +228,59 @@ class GFZMetaData(DatasetMetadata):
     B_eq: VariableMetadata
     B_sat: VariableMetadata
     B_total: VariableMetadata
+    ByIMF: VariableMetadata
+    BzIMF: VariableMetadata
+    Dst: VariableMetadata
     FEDO: VariableMetadata
+    FEDU_SA: VariableMetadata
     FEIU: VariableMetadata
+    FEIU_SA: VariableMetadata
+    FIDU: VariableMetadata
+    FIDU_SA: VariableMetadata
     FPDU: VariableMetadata
+    FPDU_SA: VariableMetadata
     Flux: VariableMetadata
+    G1: VariableMetadata
+    G2: VariableMetadata
+    G3: VariableMetadata
     InvK: VariableMetadata
     InvMu: VariableMetadata
+    InvMu_obs: VariableMetadata
+    Kp: VariableMetadata
+    LCDS: VariableMetadata
     Lm: VariableMetadata
     Lstar: VariableMetadata
     MLT: VariableMetadata
     MLT0: VariableMetadata
     MLat: VariableMetadata
+    Nsw: VariableMetadata
     PSD: VariableMetadata
+    Pdyn: VariableMetadata
     R0: VariableMetadata
+    Vsw: VariableMetadata
+    W_params: VariableMetadata
+    alpha_dlc: VariableMetadata
+    alpha_dlc_eq: VariableMetadata
     alpha_eq_model: VariableMetadata
     alpha_eq_range: VariableMetadata
     alpha_lc: VariableMetadata
     alpha_lc_eq: VariableMetadata
     alpha_local: VariableMetadata
     alpha_local_range: VariableMetadata
+    density_other: VariableMetadata
+    density_other_eq: VariableMetadata
+    density_scpot: VariableMetadata
+    density_scpot_eq: VariableMetadata
+    density_spectrogram: VariableMetadata
+    density_spectrogram_eq: VariableMetadata
     ellipticity: VariableMetadata
     energy_FEDO: VariableMetadata  # noqa: N815
     energy_FEIU: VariableMetadata  # noqa: N815
+    energy_FIDU: VariableMetadata  # noqa: N815
     energy_FPDU: VariableMetadata  # noqa: N815
     energy_channels: VariableMetadata
+    fce: VariableMetadata
+    fce_eq: VariableMetadata
     freq: VariableMetadata
     freq_bw: VariableMetadata
     geo_alt: VariableMetadata
@@ -230,30 +297,57 @@ class PRBEMMetaData(DatasetMetadata):
     """Metadata container for PRBEMStandard.
 
     Attribute names and descriptions are generated from `PRBEMStandard().variable_infos` by
-    `scripts/generate_metadata_stubs.py`; `datetime` is a computed extra added by `DataSet`.
+    `hooks/generate_metadata_stubs.py`; `datetime` is a computed extra added by `DataSet`.
 
     Attributes:
         datetime (VariableMetadata): Metadata for the computed `datetime` variable.
-        # BEGIN GENERATED PRBEM_METADATA_ATTRS DOCS
+            <!-- BEGIN GENERATED PRBEM_METADATA_ATTRS DOCS -->
         Alpha (VariableMetadata): Local pitch angle the instrument is looking at
         Alpha_Eq (VariableMetadata): Computed equatorial pitch angle the instrument is looking from Alpha, B_Calc
             and B_Eq
         B_Calc (VariableMetadata): Calculated magnetic field strength at the spacecraft position
         B_Eq (VariableMetadata): Calculated magnetic field strength at magnetic equator
+        B_total_obs (VariableMetadata): Observed magnetic field strength at the spacecraft position
+        ByIMF (VariableMetadata): GSM y-component of the interplanetary magnetic field.
+        BzIMF (VariableMetadata): GSM z-component of the interplanetary magnetic field.
+        Dst (VariableMetadata): Disturbance storm time index.
         Energy_FEDU (VariableMetadata): Central energy of unidirectional differential electron flux
         Energy_FPDU (VariableMetadata): Central energy of unidirectional differential proton flux
         Epoch (VariableMetadata): Posix Time
         FEDU (VariableMetadata): Processed unidirectional differential electron flux
         FPDU (VariableMetadata): Processed unidirectional differential proton flux
+        G1 (VariableMetadata): Tsyganenko G1 parameter.
+        G2 (VariableMetadata): Tsyganenko G2 parameter.
+        G3 (VariableMetadata): Tsyganenko G3 parameter.
         InvK (VariableMetadata): Calculated modified second adiabatic invariant.
-        InvMu (VariableMetadata): Calculated first adiabatic invariant.
+        InvMu (VariableMetadata): Calculated first adiabatic invariant from modelled magnetic field.
+        InvMu_obs (VariableMetadata): Calculated first adiabatic invariant from magnetic field observations.
+        Kp (VariableMetadata): Planetary Kp geomagnetic index.
         L_m (VariableMetadata): Calculated L McIlwain's L parameter
         L_star (VariableMetadata): Calculated Roederer's L* parameter
         MLT (VariableMetadata): Magnetic local time at the satellite location.
+        Nsw (VariableMetadata): Solar wind proton density.
+        Number_density_other (VariableMetadata): Electron number density at the satellite location, derived by other
+            methods.
+        Number_density_other_Eq (VariableMetadata): Electron number density derived by other methods, mapped to the
+            magnetic equator.
+        Number_density_scpot (VariableMetadata): Electron number density at the satellite location, derived from the
+            spacecraft potential.
+        Number_density_scpot_Eq (VariableMetadata): Electron number density derived from the spacecraft potential,
+            mapped to the magnetic equator.
+        Number_density_spectrogram (VariableMetadata): Electron number density at the satellite location, derived
+            from wave spectrograms.
+        Number_density_spectrogram_Eq (VariableMetadata): Electron number density derived from wave spectrograms,
+            mapped to the magnetic equator.
         PSD (VariableMetadata): Calculated phase space density of particles.
+        Pdyn (VariableMetadata): Solar wind dynamic pressure.
         Position (VariableMetadata): Spacecraft position in geographic cartesian coordinates
         R_Eq (VariableMetadata): Radial distance of the satellite location mapped to the equator.
-        # END GENERATED PRBEM_METADATA_ATTRS DOCS
+        Vsw (VariableMetadata): Solar wind bulk speed.
+        W_params (VariableMetadata): Tsyganenko-Sitnov W1-W6 parameters.
+        xGEO_Eq (VariableMetadata): Satellite position mapped to the magnetic equator, in geographic cartesian
+            coordinates.
+            <!-- END GENERATED PRBEM_METADATA_ATTRS DOCS -->
     """
 
     datetime: VariableMetadata
@@ -262,17 +356,37 @@ class PRBEMMetaData(DatasetMetadata):
     Alpha_Eq: VariableMetadata
     B_Calc: VariableMetadata
     B_Eq: VariableMetadata
+    B_total_obs: VariableMetadata
+    ByIMF: VariableMetadata
+    BzIMF: VariableMetadata
+    Dst: VariableMetadata
     Energy_FEDU: VariableMetadata
     Energy_FPDU: VariableMetadata
     Epoch: VariableMetadata
     FEDU: VariableMetadata
     FPDU: VariableMetadata
+    G1: VariableMetadata
+    G2: VariableMetadata
+    G3: VariableMetadata
     InvK: VariableMetadata
     InvMu: VariableMetadata
+    InvMu_obs: VariableMetadata
+    Kp: VariableMetadata
     L_m: VariableMetadata
     L_star: VariableMetadata
     MLT: VariableMetadata
+    Nsw: VariableMetadata
+    Number_density_other: VariableMetadata
+    Number_density_other_Eq: VariableMetadata
+    Number_density_scpot: VariableMetadata
+    Number_density_scpot_Eq: VariableMetadata
+    Number_density_spectrogram: VariableMetadata
+    Number_density_spectrogram_Eq: VariableMetadata
     PSD: VariableMetadata
+    Pdyn: VariableMetadata
     Position: VariableMetadata
     R_Eq: VariableMetadata
+    Vsw: VariableMetadata
+    W_params: VariableMetadata
+    xGEO_Eq: VariableMetadata  # noqa: N815
     # END GENERATED PRBEM_METADATA_ATTRS

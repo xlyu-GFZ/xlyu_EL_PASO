@@ -87,11 +87,13 @@ This section provides a detailed reference for all modules, classes, and functio
 
 [DailyWaveStrategy](saving_strategies/daily_wave.md)
 
-[DensityNetCDFStrategy](saving_strategies/density_netcdf.md)
-
 [GFZStrategy](saving_strategies/gfz.md)
 
+[MonthlyDensityStrategy](saving_strategies/monthly_density.md)
+
 [MonthlyRBStrategy](saving_strategies/monthly.md)
+
+[RBSPDensityStrategy](saving_strategies/rbsp_density.md)
 
 [SingleFileStrategy](saving_strategies/single_file.md)
 
@@ -117,8 +119,12 @@ This section provides a detailed reference for all modules, classes, and functio
 
 [GOES](recipes/goes.md)
 
+[LCDS](recipes/lcds.md)
+
 [POES](recipes/poes.md)
 
 [ProbaV](recipes/probav.md)
 
 [RBSP](recipes/rbsp.md)
+
+[Solar wind indices](recipes/solar_wind_indices.md)

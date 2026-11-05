@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2026 GFZ Helmholtz Centre for Geosciences
 # SPDX-FileContributor: Bernhard Haas
+# SPDX-FileContributor: Sahil Jhawar
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -23,14 +24,17 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
 import el_paso as ep
+from el_paso.recipes.solar_wind_indices.process_solar_wind_indices import process_solar_wind_indices
 
 
-def arase_xep_gfz_strategy(base_data_path: str | Path, mag_field: ep.typing.MagneticFieldLiteral) -> ep.SavingStrategy:
+def arase_xep_realtime_gfz_strategy(
+    base_data_path: str | Path, mag_field: ep.typing.MagneticFieldLiteral
+) -> ep.SavingStrategy:
     """Legacy GFZ .mat saving strategy for Arase XEP."""
     return ep.saving_strategies.GFZStrategy(Path(base_data_path), "Arase", "Arase", "XEP", mag_field)
 
 
-def arase_xep_strategy(
+def arase_xep_realtime_strategy(
     base_data_path: str | Path,
     mag_field: ep.typing.MagneticFieldLiteral,
     *,
@@ -60,11 +64,12 @@ def process_arase_xep_real_time(
     num_cores: int = 16,
     erg_user: str | None = None,
     erg_password: str | None = None,
-    save_strategy: Literal["gfz", "netcdf", "both"] = "netcdf",
+    save_strategy: Literal["gfz", "netcdf"] = "netcdf",
     *,
     download: bool = True,
     skip_existing: bool = True,
     do_xep_extraction: bool = True,
+    save_indices_sw: bool = False,
 ) -> None:
     """Process Arase XEP real-time electron flux data and save derived products.
 
@@ -91,12 +96,14 @@ def process_arase_xep_real_time(
             from the ``ERG_USER`` environment variable.
         erg_password (str | None): Password for the ERG data server. If None, it is
             read from the ``ERG_PASSWORD`` environment variable.
-        save_strategy (Literal["gfz", "netcdf", "both"]): Which saving strategy/strategies
+        save_strategy (Literal["gfz", "netcdf"]): Which saving strategy/strategies
             to use for writing the processed data.
         download (bool): Whether to download the raw data files before processing.
         skip_existing (bool): Whether to skip downloading files that already exist locally.
         do_xep_extraction (bool): Whether to extract the XEP flux product. If False, only the
             orbit data is processed.
+        save_indices_sw (bool): If True, also save all solar wind indices and parameters,
+            independent of this recipe's own output. Defaults to False.
 
     Raises:
         ValueError: If `erg_user` is not provided and the ``ERG_USER`` environment variable is
@@ -120,25 +127,31 @@ def process_arase_xep_real_time(
         msg = "ERG_PASSWORD not found! Either load it from environment variables or pass it as an argument."
         raise ValueError(msg)
 
+    data_path_stem = f"{raw_data_path}/ARASE/YYYY/MM/"
+    base_url = "https://ergsc.isee.nagoya-u.ac.jp/data/ergsc/satellite/erg/swx/"
+
+    if download:
+        products = [("orb/", "erg_orb_pre_l2_YYYYMMDD_v01.txt")]
+        if do_xep_extraction:
+            products.insert(0, ("xep/l2/", "erg_real_xep_YYYYMMDD_v002.txt"))
+
+        for url_suffix, file_name_stem in products:
+            ep.download(
+                start_time,
+                end_time,
+                save_path=data_path_stem,
+                file_cadence="daily",
+                download_url=base_url + url_suffix,
+                authentication_info=(erg_user, erg_password),
+                file_name_stem=file_name_stem,
+                skip_existing=skip_existing,
+            )
+
+    ep.exit_if_download_only()
+
     if do_xep_extraction:
-        xep_variables = _get_xep_variables(
-            raw_data_path,
-            start_time,
-            end_time,
-            erg_user,
-            erg_password,
-            download=download,
-            skip_existing=skip_existing,
-        )
-    orb_variables = _get_orb_variables(
-        raw_data_path,
-        start_time,
-        end_time,
-        erg_user,
-        erg_password,
-        download=download,
-        skip_existing=skip_existing,
-    )
+        xep_variables = _get_xep_variables(raw_data_path, start_time, end_time)
+    orb_variables = _get_orb_variables(raw_data_path, start_time, end_time)
 
     time_bin_methods_xep = {
         "FEDO": ep.TimeBinMethod.NanMedian,
@@ -210,7 +223,7 @@ def process_arase_xep_real_time(
         FEDU_var, variables_combined["Energy_FEDO"], particle_species="electron"
     )
 
-    variables_to_save: dict[ep.typing.InternalName, ep.Variable] = {
+    variables_to_save: ep.typing.VariablesDict = {
         "Epoch": binned_time_var,
         "FEDU": FEDU_var,
         "Energy_FEDU": variables_combined["Energy_FEDO"],
@@ -227,28 +240,26 @@ def process_arase_xep_real_time(
         "Position": variables_combined["xGEO"],
     }
 
-    if save_strategy in ("gfz", "both"):
-        saving_strategy = arase_xep_gfz_strategy(processed_data_path, mag_field)
+    if save_strategy == "gfz":
+        saving_strategy = arase_xep_realtime_gfz_strategy(processed_data_path, mag_field)
+    else:
+        saving_strategy = arase_xep_realtime_strategy(processed_data_path, mag_field)
 
-        ep.save(
-            variables_to_save,
-            saving_strategy,
+    ep.save(
+        variables_to_save,
+        saving_strategy,
+        start_time,
+        end_time,
+        time_var=binned_time_var,
+        append=True,
+    )
+
+    if save_indices_sw:
+        process_solar_wind_indices(
             start_time,
             end_time,
-            time_var=binned_time_var,
-            append=True,
-        )
-
-    if save_strategy in ("netcdf", "both"):
-        saving_strategy = arase_xep_strategy(processed_data_path, mag_field)
-
-        ep.save(
-            variables_to_save,
-            saving_strategy,
-            start_time,
-            end_time,
-            time_var=binned_time_var,
-            append=True,
+            processed_data_path=processed_data_path,
+            bin_cadence=bin_cadence,
         )
 
 
@@ -256,11 +267,6 @@ def _get_xep_variables(
     raw_data_path: str | Path,
     start_time: datetime,
     end_time: datetime,
-    erg_user: str,
-    erg_password: str,
-    *,
-    download: bool,
-    skip_existing: bool,
 ) -> dict[str, ep.Variable]:
     # Energies from the User's guide
     energy_min = np.asarray((400.0, 600.0, 1000.0, 1500.0, 2200.0, 3500.0, 4300.0, 5400.0))
@@ -269,19 +275,6 @@ def _get_xep_variables(
 
     data_path_stem = f"{raw_data_path}/ARASE/YYYY/MM/"
     file_name_stem = "erg_real_xep_YYYYMMDD_v002.txt"
-    url = "https://ergsc.isee.nagoya-u.ac.jp/data/ergsc/satellite/erg/swx/xep/l2/"
-
-    if download:
-        ep.download(
-            start_time,
-            end_time,
-            save_path=data_path_stem,
-            file_cadence="daily",
-            download_url=url,
-            authentication_info=(erg_user, erg_password),
-            file_name_stem=file_name_stem,
-            skip_existing=skip_existing,
-        )
 
     fedo_unit = typing.cast("u.Unit", (u.cm**2 * u.s * u.keV) ** (-1))
 
@@ -363,27 +356,9 @@ def _get_orb_variables(
     raw_data_path: str | Path,
     start_time: datetime,
     end_time: datetime,
-    erg_user: str,
-    erg_password: str,
-    *,
-    download: bool,
-    skip_existing: bool,
 ) -> dict[str, ep.Variable]:
     data_path_stem = f"{raw_data_path}/ARASE/YYYY/MM/"
     file_name_stem = "erg_orb_pre_l2_YYYYMMDD_v01.txt"
-    url = "https://ergsc.isee.nagoya-u.ac.jp/data/ergsc/satellite/erg/swx/orb/"
-
-    if download:
-        ep.download(
-            start_time,
-            end_time,
-            save_path=data_path_stem,
-            file_cadence="daily",
-            download_url=url,
-            authentication_info=(erg_user, erg_password),
-            file_name_stem=file_name_stem,
-            skip_existing=skip_existing,
-        )
 
     extraction_infos = [
         ep.ExtractionInfo(name_or_column="time", unit=u.dimensionless_unscaled, result_key="Epoch"),

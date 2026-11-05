@@ -84,14 +84,24 @@ def _interp_flux_parallel(
             result.append(np.nan)
             continue
 
-        energy_interp = energy_i[finite_use[:, al_left_idx]]
-        flux_interp = flux_use[finite_use[:, al_left_idx], al_left_idx]
+        finite_idx = np.argwhere(np.isfinite(energy[it, :]) & np.isfinite(flux[it, :, al_left_idx]))
+        if finite_idx.size == 0:
+            result.append(np.nan)
+            continue
+
+        energy_interp = np.squeeze(energy[it, finite_idx])
+        flux_interp = np.squeeze(flux[it, finite_idx, al_left_idx])
         assert np.all(np.diff(energy_interp) > 0)
 
         flux_left = float(np.interp(target_en_single, energy_interp, flux_interp, left=np.nan, right=np.nan))
 
-        energy_interp = energy_i[finite_use[:, al_right_idx]]
-        flux_interp = flux_use[finite_use[:, al_right_idx], al_right_idx]
+        finite_idx = np.argwhere(np.isfinite(energy[it, :]) & np.isfinite(flux[it, :, al_right_idx]))
+        if finite_idx.size == 0:
+            result.append(np.nan)
+            continue
+
+        energy_interp = np.squeeze(energy[it, finite_idx])
+        flux_interp = np.squeeze(flux[it, finite_idx, al_right_idx])
         assert np.all(np.diff(energy_interp) > 0)
 
         flux_right = float(np.interp(target_en_single, energy_interp, flux_interp, left=np.nan, right=np.nan))

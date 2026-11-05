@@ -11,7 +11,7 @@ import logging
 import os
 import typing
 from pathlib import Path
-from typing import Literal, NamedTuple
+from typing import TYPE_CHECKING, Literal, NamedTuple
 
 import numpy as np
 from astropy import units as u
@@ -21,8 +21,12 @@ import el_paso as ep
 import el_paso.processing.magnetic_field_utils as mag_utils
 from el_paso import Variable
 from el_paso.cache import clear_cache_on_success, get_cache_dir
+from el_paso.processing.compute_electron_gyrofrequency import compute_electron_gyrofrequency
 from el_paso.typing import MagFieldVarTypes, MagneticFieldLiteral
 from el_paso.utils import make_dict_hashable, timed_function
+
+if TYPE_CHECKING:
+    from el_paso.typing import VariablesDict
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +56,7 @@ def compute_magnetic_field_variables(
     variables_to_compute: VariableRequest,
     irbem_options: mag_utils.IrbemOptions,
     num_cores: int,
-    indices_solar_wind: dict[str, Variable] | None = None,
+    indices_solar_wind: VariablesDict | None = None,
     pa_local_var: Variable | None = None,
     energy_var: Variable | None = None,
     particle_species: Literal["electron", "proton"] | None = None,
@@ -86,7 +90,7 @@ def compute_magnetic_field_variables(
             library calls, controlling aspects like model selection, bounce tracing, etc.
         num_cores (int): The number of CPU cores to use for parallel processing
             within IRBEM calls.
-        indices_solar_wind (dict[str, Variable] | None): Optional. A dictionary
+        indices_solar_wind (VariablesDict | None): Optional. A dictionary
             containing solar wind indices (e.g., "Kp", "Dst") as `Variable` objects.
             Defaults to None.
         pa_local_var (Variable | None): Optional. A Variable object containing
@@ -154,12 +158,11 @@ def compute_magnetic_field_variables(
             energy_var,
             particle_species,
         )
-
         if overwrite_cache:
             logger.info("Overwriting cached magnetic field variables (overwrite_cache=True).")
-            result, _ = cached_fn.call(*call_args, irbem_lib_path=irbem_lib_path)
+            computed_variables, _ = cached_fn.call(*call_args, irbem_lib_path=irbem_lib_path)
             logger.info("Magnetic field variables computed and cached at %s.", cache_dir)
-            return result
+            return computed_variables
 
         if cached_fn.check_call_in_cache(*call_args, irbem_lib_path=irbem_lib_path):
             logger.info("Loading magnetic field variables from cache at %s.", cache_dir)
@@ -188,7 +191,7 @@ def _compute_core(
     variables_to_compute: VariableRequest,
     irbem_options: mag_utils.IrbemOptions,
     num_cores: int,
-    indices_solar_wind: dict[str, Variable] | None = None,
+    indices_solar_wind: VariablesDict | None = None,
     pa_local_var: Variable | None = None,
     energy_var: Variable | None = None,
     particle_species: Literal["electron", "proton"] | None = None,
@@ -258,11 +261,9 @@ def _compute_core(
         )
 
     # only return the requested variables
-    computed_variables = {
+    return {
         var_name: computed_variables[var_name] for var_name in computed_variables if var_name in var_names_to_compute
     }
-
-    return computed_variables
 
 
 def _get_result(
@@ -308,6 +309,15 @@ def _get_result(
 
         case "R_Eq" | "B_Eq" | "xGEO_Eq" | "MLT_Eq":
             result_dict = mag_utils.get_magequator(xgeo_var, time_var, irbem_input)
+
+        case "f_ce" | "f_ce_Eq":
+            result_dict = _get_electron_gyrofrequency(
+                var_type,
+                xgeo_var,
+                time_var,
+                computed_vars,
+                irbem_input,
+            )
 
         case "L_star" | "L_m" | "I":
             result_dict = mag_utils.get_Lstar(xgeo_var, time_var, pa_local_var, irbem_input)
@@ -357,6 +367,9 @@ def _get_result(
                 irbem_input,
             )
 
+        case "Alpha_DLC" | "Alpha_DLC_Eq":
+            result_dict = mag_utils.get_drift_loss_cone(xgeo_var, time_var, irbem_input)
+
         case _:
             msg = f"Variable '{var_type}' is not implemented in compute_magnetic_field_variables."
             raise NotImplementedError(msg)
@@ -404,6 +417,58 @@ def _requires_pa_var(vars_to_compute: list[MagFieldVar]) -> bool:
     var_types = [mag_field_var.type for mag_field_var in vars_to_compute]
 
     return any(var_type in ["L_star", "Alpha_Eq", "InvMu", "InvK", "B_mirr", "I", "L_m"] for var_type in var_types)
+
+
+@timed_function("Electron gyrofrequency calculation")
+def _get_electron_gyrofrequency(
+    var_type: Literal["f_ce", "f_ce_Eq"],
+    xgeo_var: Variable,
+    time_var: Variable,
+    computed_vars: dict[str, Variable],
+    irbem_input: mag_utils.IrbemInput,
+) -> dict[str, Variable]:
+    """Calculates the electron gyrofrequency from the modelled magnetic field strength.
+
+    The gyrofrequency follows from the field strength alone, so it inherits the magnetic field
+    model: `f_ce` uses the field at the satellite, `f_ce_Eq` the field at the magnetic equator
+    of the same field line.
+
+    Note that this is the gyrofrequency of the *modelled* field. A recipe holding a
+    magnetometer observation is usually better served computing it from that measurement
+    directly, which does not depend on a field model at all.
+
+    Args:
+        var_type (Literal["f_ce", "f_ce_Eq"]): Whether to use the local or the equatorial field.
+        xgeo_var (Variable): Variable containing geocentric (XGEO) coordinates.
+        time_var (Variable): Variable containing time data.
+        computed_vars (dict[str, Variable]): A dictionary of already computed variables to reuse.
+        irbem_input (mag_utils.IrbemInput): A named tuple containing all necessary IRBEM inputs.
+
+    Returns:
+        dict[str, Variable]: A dictionary containing the newly computed gyrofrequency variable.
+    """
+    logger.info("\tCalculating electron gyrofrequency ...")
+
+    if var_type == "f_ce_Eq":
+        b_name = mag_utils.create_var_name("B_Eq", irbem_input.magnetic_field)
+        if b_name not in computed_vars:
+            computed_vars |= mag_utils.get_magequator(xgeo_var, time_var, irbem_input)
+        source = "the magnetic equator"
+    else:
+        b_name = mag_utils.create_var_name("B_Calc", irbem_input.magnetic_field)
+        if b_name not in computed_vars:
+            computed_vars |= mag_utils.get_local_B_field(xgeo_var, time_var, irbem_input)
+        source = "the satellite location"
+
+    f_ce_var = compute_electron_gyrofrequency(computed_vars[b_name])
+    f_ce_var.metadata.add_processing_note(
+        f"Computed electron gyrofrequency from the magnetic field strength at {source} "
+        f"using {irbem_input.magnetic_field} and options: {irbem_input.irbem_options}."
+    )
+
+    computed_vars[mag_utils.create_var_name(var_type, irbem_input.magnetic_field)] = f_ce_var
+
+    return computed_vars
 
 
 @timed_function("Equatorial pitch angle calculation")
@@ -559,7 +624,8 @@ def _get_eq_loss_cone_angle(
     B_fofl = computed_vars[B_fofl_name].get_data(u.nT).astype(np.float64)
     B_eq = computed_vars[B_eq_name].get_data(u.nT).astype(np.float64)
 
-    pa_lc_eq = np.asin(np.sqrt(B_eq / B_fofl))
+    # B_eq is the minimum along the field line, so the ratio cannot exceed 1 beyond round-off
+    pa_lc_eq = np.asin(np.sqrt(np.clip(B_eq / B_fofl, 0, 1)))
 
     pa_lc_eq_name = mag_utils.create_var_name("Alpha_LC_Eq", irbem_input.magnetic_field)
     computed_vars[pa_lc_eq_name] = ep.Variable(data=pa_lc_eq, original_unit=u.rad)
@@ -582,13 +648,16 @@ def _get_local_loss_cone_angle(
     if B_fofl_name not in computed_vars:
         computed_vars |= mag_utils.get_footpoint_atmosphere(xgeo_var, time_var, irbem_input)
     if B_local_name not in computed_vars:
-        computed_vars |= mag_utils.get_magequator(xgeo_var, time_var, irbem_input)
+        computed_vars |= mag_utils.get_local_B_field(xgeo_var, time_var, irbem_input)
 
     # load needed data and convert to correct units
     B_fofl = computed_vars[B_fofl_name].get_data(u.nT).astype(np.float64)
     B_local = computed_vars[B_local_name].get_data(u.nT).astype(np.float64)
 
-    pa_lc_local = np.asin(np.sqrt(B_local / B_fofl))
+    # Where the weaker foot point field is below the local field, as on field lines whose other end lies
+    # in the South Atlantic Anomaly, every particle seen here reaches below 100 km at that end: the whole
+    # distribution is inside the loss cone, i.e. 90 degrees.
+    pa_lc_local = np.asin(np.sqrt(np.clip(B_local / B_fofl, 0, 1)))
 
     pa_lc_local_name = mag_utils.create_var_name("Alpha_LC", irbem_input.magnetic_field)
     computed_vars[pa_lc_local_name] = ep.Variable(data=pa_lc_local, original_unit=u.rad)

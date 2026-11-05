@@ -4,18 +4,29 @@
 
 from __future__ import annotations
 
+import sys
 import warnings
-from collections.abc import Iterable
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
 import numpy as np
-import pandas as pd
-import xarray as xr
-from swvo.io.utils import enforce_utc_timezone
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    import xarray as xr
     from numpy.typing import NDArray
+    from typing_extensions import TypeIs
+
+
+def is_xr_variable(value: object) -> TypeIs[xr.Variable]:
+    """Return True if `value` is an ``xr.Variable``, without importing xarray.
+
+    An ``xr.Variable`` can only exist once xarray has been imported, so if it isn't
+    loaded yet the answer is False and the import is skipped.
+    """
+    xr_module = sys.modules.get("xarray")
+    return xr_module is not None and isinstance(value, xr_module.Variable)
 
 
 def join_var(
@@ -37,7 +48,7 @@ def join_var(
     if isinstance(var1, np.ndarray) and isinstance(var2, np.ndarray):
         return np.concatenate((var1, var2), axis=0)
 
-    if isinstance(var1, xr.Variable):
+    if is_xr_variable(var1):
         var1 = [var1]
 
     var1.append(var2)  # ty: ignore[invalid-argument-type, unresolved-attribute]
@@ -73,9 +84,9 @@ def python2matlab(datenum: datetime) -> float:
         a fractional component for the time of day.
     """
     mdn = datenum + timedelta(days=366)
-    frac = (datenum - datetime(datenum.year, datenum.month, datenum.day, 0, 0, 0, tzinfo=timezone.utc)).seconds / (
-        24.0 * 60.0 * 60.0
-    )
+    frac = (
+        datenum - datetime(datenum.year, datenum.month, datenum.day, 0, 0, 0, tzinfo=timezone.utc)
+    ).total_seconds() / (24.0 * 60.0 * 60.0)
     return mdn.toordinal() + round(frac, 6)
 
 
@@ -90,18 +101,19 @@ def matlab2python(datenum: float | Iterable[float]) -> Iterable[datetime] | date
         Iterable[datetime] | datetime: The converted, UTC-aware, second-rounded
         datetime(s), matching the scalar-vs-iterable shape of the input.
     """
+    import pandas as pd  # noqa: PLC0415
+    from swvo.io.utils import enforce_utc_timezone  # noqa: PLC0415
+
     warnings.filterwarnings("ignore", message="Discarding nonzero nanoseconds in conversion")
 
-    datenum = np.asarray(datenum, dtype=float)
-    datenum = pd.to_datetime(datenum - 719529, unit="D", origin=pd.Timestamp("1970-01-01")).to_pydatetime()  # ty:ignore[unresolved-attribute]
+    datenum_arr = np.asarray(datenum, dtype=float)
+    converted = pd.to_datetime(np.atleast_1d(datenum_arr) - 719529, unit="D", origin=pd.Timestamp("1970-01-01"))
+    py_datetimes: list[datetime] = [ts.to_pydatetime() for ts in converted]
+    rounded = [round_seconds(x) for x in enforce_utc_timezone(py_datetimes)]
 
-    if isinstance(datenum, Iterable):
-        datenum = enforce_utc_timezone(list(datenum))  # ty: ignore[invalid-assignment]
-        datenum: Iterable[datetime] = [round_seconds(x) for x in datenum]  # ty: ignore[not-iterable, invalid-argument-type]
-    else:
-        datenum: datetime = round_seconds(enforce_utc_timezone(datenum))
-
-    return datenum
+    if datenum_arr.ndim == 0:
+        return rounded[0]
+    return rounded
 
 
 def pol2cart(

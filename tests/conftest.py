@@ -8,7 +8,6 @@ import typing
 from collections.abc import Callable
 from urllib.parse import urlparse
 
-import netCDF4
 import pytest
 
 
@@ -51,6 +50,12 @@ def indices_sw_param_data_path(
     cli_path = request.config.getoption("--indices_sw_param_data_path")
     path = cli_path or tmp_path_factory.mktemp("sw_param_data")
     monkeypatch.setenv("EL_PASO_INDICES_SW_PARAM_DATA_PATH", str(path))
+
+
+@pytest.fixture
+def enable_downloads(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Unset EL_PASO_SKIP_DOWNLOAD for tests whose raw data is not part of the Hugging Face test data."""
+    monkeypatch.delenv("EL_PASO_SKIP_DOWNLOAD", raising=False)
 
 
 _DEFAULT_PORTS_BY_SCHEME = {"https": 443, "http": 80, "ftp": 21}

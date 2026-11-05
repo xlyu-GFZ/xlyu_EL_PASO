@@ -1,5 +1,7 @@
 # SPDX-FileCopyrightText: 2025 GFZ Helmholtz Centre for Geosciences
+# SPDX-FileCopyrightText: 2026 GFZ Helmholtz Centre for Geosciences
 # SPDX-FileContributor: Bernhard Haas
+# SPDX-FileContributor: Sahil Jhawar
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -13,6 +15,7 @@ from astropy import units as u
 
 import el_paso as ep
 from el_paso.recipes.dmsp import DMSPSatellite
+from el_paso.recipes.solar_wind_indices.process_solar_wind_indices import process_solar_wind_indices
 
 logging.captureWarnings(capture=True)
 logger = logging.getLogger(__name__)
@@ -52,6 +55,7 @@ def process_dmsp_ssj_electrons(
     save_strategy: Literal["netcdf"] = "netcdf",
     *,
     skip_existing: bool = True,
+    save_indices_sw: bool = False,
 ) -> None:
     """Process DMSP SSJ precipitating electron data into omnidirectional fluxes with magnetic field coordinates.
 
@@ -77,13 +81,45 @@ def process_dmsp_ssj_electrons(
         save_strategy (Literal["netcdf"]): The saving strategy used to write the processed
                                                     data. DMSP SSJ electron data only supports a single
                                                     netCDF-based strategy.
+        save_indices_sw (bool): If True, also save all solar wind indices and parameters,
+            independent of this recipe's own output. Defaults to False.
     """
     del save_strategy
 
     data_path_stem = f"{raw_data_path}/DMSP/{satellite}/YYYY/MM/"
 
-    ssm_vars = _get_ssm_variables(satellite, data_path_stem, start_time, end_time, skip_existing=skip_existing)
-    ssj_vars = _get_ssj_variables(satellite, data_path_stem, start_time, end_time, skip_existing=skip_existing)
+    ssm_url = f"https://cdaweb.gsfc.nasa.gov/pub/data/dmsp/dmsp{satellite}/ssm/magnetometer/YYYY/"
+
+    ssm_file_name_stem = "dmsp-" + satellite + "_ssm_magnetometer_YYYYMMDD_.{6}.cdf"
+
+    ep.download(
+        start_time,
+        end_time,
+        save_path=data_path_stem,
+        file_cadence="daily",
+        download_url=ssm_url,
+        file_name_stem=ssm_file_name_stem,
+        skip_existing=skip_existing,
+    )
+
+    ssj_url = f"https://cdaweb.gsfc.nasa.gov/pub/data/dmsp/dmsp{satellite}/ssj/precipitating-electrons-ions/YYYY/"
+
+    ssj_file_name_stem = "dmsp-" + satellite + "_ssj_precipitating-electrons-ions_YYYYMMDD_.{6}.cdf"
+
+    ep.download(
+        start_time,
+        end_time,
+        save_path=data_path_stem,
+        file_cadence="daily",
+        download_url=ssj_url,
+        file_name_stem=ssj_file_name_stem,
+        skip_existing=skip_existing,
+    )
+
+    ep.exit_if_download_only()
+
+    ssm_vars = _get_ssm_variables(ssm_file_name_stem, data_path_stem, start_time, end_time)
+    ssj_vars = _get_ssj_variables(ssj_file_name_stem, data_path_stem, start_time, end_time)
 
     time_bin_methods_ssm = {
         "b_brf": ep.TimeBinMethod.NanMean,
@@ -188,7 +224,7 @@ def process_dmsp_ssj_electrons(
         num_cores=num_cores,
     )
 
-    variables_to_save: dict[ep.typing.InternalName, ep.Variable] = {
+    variables_to_save: ep.typing.VariablesDict = {
         "Epoch": binned_time_var,
         "FEDO": ssj_vars["diff_omni_flux"],
         "Energy_FEDO": ssj_vars["diff_energy"],
@@ -210,29 +246,21 @@ def process_dmsp_ssj_electrons(
 
     ep.save(variables_to_save, saving_strategy, start_time, end_time, time_var=binned_time_var)
 
+    if save_indices_sw:
+        process_solar_wind_indices(
+            start_time,
+            end_time,
+            processed_data_path=processed_data_path,
+            bin_cadence=bin_cadence,
+        )
+
 
 def _get_ssm_variables(
-    satellite: DMSPSatellite,
+    file_name_stem: str,
     data_path_stem: str | Path,
     start_time: datetime,
     end_time: datetime,
-    *,
-    skip_existing: bool = True,
 ) -> dict[str, ep.Variable]:
-    url = f"https://cdaweb.gsfc.nasa.gov/pub/data/dmsp/dmsp{satellite}/ssm/magnetometer/YYYY/"
-
-    file_name_stem = "dmsp-" + satellite + "_ssm_magnetometer_YYYYMMDD_.{6}.cdf"
-
-    ep.download(
-        start_time,
-        end_time,
-        save_path=data_path_stem,
-        file_cadence="daily",
-        download_url=url,
-        file_name_stem=file_name_stem,
-        skip_existing=skip_existing,
-    )
-
     extraction_infos = [
         ep.ExtractionInfo(name_or_column="Epoch", unit=ep.units.cdf_epoch, result_key="time"),
         ep.ExtractionInfo(name_or_column="B_SC_OBS_ORIG", unit=u.nT, result_key="b_brf"),
@@ -249,27 +277,11 @@ def _get_ssm_variables(
 
 
 def _get_ssj_variables(
-    satellite: DMSPSatellite,
+    file_name_stem: str,
     data_path_stem: str | Path,
     start_time: datetime,
     end_time: datetime,
-    *,
-    skip_existing: bool = True,
 ) -> dict[str, ep.Variable]:
-    url = f"https://cdaweb.gsfc.nasa.gov/pub/data/dmsp/dmsp{satellite}/ssj/precipitating-electrons-ions/YYYY/"
-
-    file_name_stem = "dmsp-" + satellite + "_ssj_precipitating-electrons-ions_YYYYMMDD_.{6}.cdf"
-
-    ep.download(
-        start_time,
-        end_time,
-        save_path=data_path_stem,
-        file_cadence="daily",
-        download_url=url,
-        file_name_stem=file_name_stem,
-        skip_existing=skip_existing,
-    )
-
     extraction_infos = [
         ep.ExtractionInfo(name_or_column="Epoch", unit=ep.units.cdf_epoch, result_key="time"),
         ep.ExtractionInfo(

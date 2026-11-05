@@ -14,7 +14,6 @@ from copy import deepcopy
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
-import netCDF4 as nC
 import numpy as np
 from astropy import units as u
 
@@ -32,6 +31,7 @@ if TYPE_CHECKING:
         SavedDataDict,
         StandardName,
         TimeInterval,
+        VariablesDict,
     )
 
 
@@ -241,10 +241,10 @@ class SavingStrategy(ABC):
             tmp_path = Path(tmp_file.name)
 
         try:
-            logger.info(f"Writing merged data to temporary file {tmp_path.name}")
+            logger.debug(f"Writing merged data to temporary file {tmp_path.name}")
             writer(tmp_path, merged_data, self.data_standard)
 
-            logger.info(f"Replacing original file with merged data for {file_path.name}")
+            logger.debug(f"Replacing original file with merged data for {file_path.name}")
             shutil.move(str(tmp_path), str(file_path))
             logger.info(f"Successfully inserted data into {file_path.resolve()}")
 
@@ -336,6 +336,8 @@ class SavingStrategy(ABC):
 
     def _validate_netcdf_appendable(self, file_path: Path) -> None:
         """Validate that the existing NetCDF file has an unlimited time dimension."""
+        import netCDF4 as nC  # noqa: PLC0415
+
         with nC.Dataset(file_path, "r", format="NETCDF4") as file:
             time_dim = file.dimensions.get("Epoch")
             if time_dim is None or not time_dim.isunlimited():
@@ -367,22 +369,22 @@ class SavingStrategy(ABC):
     def get_target_variables(
         self,
         output_file: OutputFile,
-        variables_dict: dict[InternalName, ep.Variable],
+        variables_dict: VariablesDict,
         time_var: ep.Variable | None,
         start_time: datetime | None,
         end_time: datetime | None,
-    ) -> dict[InternalName, ep.Variable] | None:
+    ) -> VariablesDict | None:
         """Retrieves and processes target variables for saving based on the specified output file.
 
         Args:
             output_file (OutputFile): The output file configuration containing variable names to save.
-            variables_dict (dict[str, Variable]): Dictionary mapping variable names to Variable objects.
+            variables_dict (VariablesDict): Dictionary mapping variable names to Variable objects.
             time_var (Variable | None): The time variable used for truncation, if applicable.
             start_time (datetime | None): The start time for truncating variables, if specified.
             end_time (datetime | None): The end time for truncating variables, if specified.
 
         Returns:
-            dict[str, Variable] | None:
+            VariablesDict | None:
                 - A dictionary of processed Variable objects keyed by their names,
                     or None if any specified variable name is not found in variables_dict.
 
@@ -390,9 +392,13 @@ class SavingStrategy(ABC):
             - If no variable names are specified in output_file, all variables in variables_dict are processed.
             - Variables are deep-copied before processing.
             - Each variable is standardized using the `standardize_variable` method.
-            - If a requested variable name is not found, a warning is issued and None is returned.
+            - If a requested variable name is not found and ``output_file.save_incomplete`` is False,
+                None is returned without a warning (the caller logs one). If it is True, missing names
+                are filled with an empty placeholder Variable, unless at most one name resolved at all
+                (e.g. only the shared time axis), in which case None is returned since the output would
+                otherwise hold nothing but that time axis.
         """
-        target_variables: dict[InternalName, ep.Variable] = {}
+        target_variables: VariablesDict = {}
         first_call_of_interval = True
         available_keys = set(variables_dict.keys())
 
@@ -401,7 +407,12 @@ class SavingStrategy(ABC):
             for key, var in variables_dict.items():
                 var_to_save = deepcopy(var)
 
-                if start_time is not None and end_time is not None and time_var is not None:
+                if (
+                    start_time is not None
+                    and end_time is not None
+                    and time_var is not None
+                    and "Epoch" in self.data_standard.get_dependencies(key)
+                ):
                     var_to_save.truncate(time_var, start_time.timestamp(), end_time.timestamp())
                 var_to_save = self.standardize_variable(
                     var_to_save, key, first_call_of_interval=first_call_of_interval, available_keys=available_keys
@@ -413,6 +424,7 @@ class SavingStrategy(ABC):
             return target_variables
 
         missing_names = []
+        resolved_count = 0
 
         for name_to_save in output_file.names_to_save:
             # a tuple entry means "either of these species-specific names satisfies it"
@@ -422,9 +434,15 @@ class SavingStrategy(ABC):
                 resolved_name = name_to_save if name_to_save in variables_dict else None
 
             if resolved_name is not None:
+                resolved_count += 1
                 var_to_save = deepcopy(variables_dict[resolved_name])
 
-                if start_time is not None and end_time is not None and time_var is not None:
+                if (
+                    start_time is not None
+                    and end_time is not None
+                    and time_var is not None
+                    and "Epoch" in self.data_standard.get_dependencies(resolved_name)
+                ):
                     var_to_save.truncate(time_var, start_time.timestamp(), end_time.timestamp())
 
                 var_to_save = self.standardize_variable(
@@ -449,6 +467,12 @@ class SavingStrategy(ABC):
                     return None
 
         if len(missing_names) > 0:
+            # if an optional output file resolved at most one name (typically just the shared
+            # time axis, e.g. "Epoch"), none of its actual content is available: skip the whole
+            # file instead of writing one that holds only a time axis and empty fallbacks.
+            if output_file.save_incomplete and resolved_count <= 1:
+                return None
+
             msg = f"Could not find target variable(s) {', '.join(sorted(missing_names))}!"
             logger.warning(msg, stacklevel=2)
 

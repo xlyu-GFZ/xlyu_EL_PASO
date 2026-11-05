@@ -94,8 +94,10 @@ class MonthlyRBStrategy(SavingStrategy):
             "Alpha",
             "B_Calc",
             "B_Eq",
+            "B_total_obs",
             "InvK",
             "InvMu",
+            "InvMu_obs",
             "Position",
             "PSD",
             "R_Eq",
@@ -103,10 +105,6 @@ class MonthlyRBStrategy(SavingStrategy):
             "L_m",
             "L_star",
         ]
-
-    def _sanitize_dimension_name(self, variable_name: str) -> str:
-        """Return a NetCDF-safe root dimension name derived from a variable path."""
-        return "".join(char if char.isalnum() else "_" for char in variable_name).strip("_") or "custom"
 
     def get_time_intervals_to_save(self, start_time: datetime | None, end_time: datetime | None) -> list[TimeInterval]:
         """Split the requested time range into full monthly intervals."""

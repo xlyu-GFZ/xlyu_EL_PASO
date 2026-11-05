@@ -1,36 +1,29 @@
 # SPDX-FileCopyrightText: 2026 GFZ Helmholtz Centre for Geosciences
 # SPDX-FileContributor: Bernhard Haas
+# SPDX-FileContributor: Sahil Jhawar
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import ast
 import importlib
 import os
-from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import pytest
-from astropy import units as u
-
 import el_paso as ep
+import pytest
 
 
-@pytest.mark.basic
-def test_esa_api(tmp_path: Path, skip_if_unreachable: Callable[..., None]):
-
-    skip_if_unreachable("https://swe.ssa.esa.int", "https://sso.s2p.esa.int")
+@pytest.mark.usefixtures("enable_downloads")
+@pytest.mark.network
+def test_esa_api(tmp_path: Path):
 
     client_id = os.environ.get("ESA_CLIENT_ID")
     client_secret = os.environ.get("ESA_CLIENT_SECRET")
 
-    if client_id is None:
-        msg = "Client ID not found!"
-        raise ValueError(msg)
-
-    if client_secret is None:
-        msg = "Client secret not found!."
-        raise ValueError(msg)
+    if not client_id or not client_secret:
+        pytest.skip("ESA_CLIENT_ID/ESA_CLIENT_SECRET not set; skipping live ESA API test.")
 
     start_time = datetime(2025, 3, 17, tzinfo=timezone.utc)
     end_time = datetime(2025, 3, 17, 1, tzinfo=timezone.utc)
@@ -54,10 +47,9 @@ def test_esa_api(tmp_path: Path, skip_if_unreachable: Callable[..., None]):
     assert len(list(tmp_path.glob("*"))) == 1
 
 
-@pytest.mark.basic
-def test_request(tmp_path: Path, skip_if_unreachable: Callable[..., None], monkeypatch: pytest.MonkeyPatch):
-
-    skip_if_unreachable("https://spdf.gsfc.nasa.gov")
+@pytest.mark.usefixtures("enable_downloads")
+@pytest.mark.network
+def test_request(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
     download_mod = importlib.import_module("el_paso.download")
 
@@ -117,6 +109,8 @@ def test_request(tmp_path: Path, skip_if_unreachable: Callable[..., None], monke
     assert len(list(data_path.glob("*"))) == 1
 
 
+@pytest.mark.usefixtures("enable_downloads")
+@pytest.mark.basic
 def test_get_next_time_with_callable_cadence() -> None:
     """A callable file_cadence should be invoked with curr_time and its return value used directly."""
     download_mod = importlib.import_module("el_paso.download")
@@ -131,6 +125,7 @@ def test_get_next_time_with_callable_cadence() -> None:
     assert next_time == datetime(2024, 1, 8, tzinfo=timezone.utc)
 
 
+@pytest.mark.usefixtures("enable_downloads")
 @pytest.mark.basic
 def test_download_with_callable_cadence(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A callable file_cadence should drive ep.download the same way a built-in literal does."""
@@ -173,9 +168,89 @@ def test_download_with_callable_cadence(tmp_path: Path, monkeypatch: pytest.Monk
     assert len(downloaded_urls) == 3
 
 
+@pytest.mark.usefixtures("enable_downloads")
 @pytest.mark.basic
-def test_ftp(tmp_path: Path, skip_if_unreachable: Callable[..., None]):
-    skip_if_unreachable("ftp://ftp.gfz.de/pub/home/obs/Kp_ap_Ap_SN_F107/")
+def test_download_single_file_cadence_runs_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """file_cadence="single_file" must create exactly one task instead of looping forever."""
+    download_mod = importlib.import_module("el_paso.download")
+
+    steps: list[tuple[datetime, datetime]] = []
+
+    def mock_step(curr_time: datetime, next_time: datetime, **_kwargs: object) -> None:
+        steps.append((curr_time, next_time))
+
+    monkeypatch.setattr(download_mod, "_download_single_step", mock_step)
+
+    start_time = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    end_time = datetime(2024, 1, 2, tzinfo=timezone.utc)
+
+    ep.download(
+        start_time=start_time,
+        end_time=end_time,
+        save_path=tmp_path,
+        file_cadence="single_file",
+        download_url="https://fake.server/data/",
+        file_name_stem="file.txt",
+    )
+
+    assert steps == [(start_time, end_time)]
+
+
+@pytest.mark.usefixtures("enable_downloads")
+@pytest.mark.basic
+@pytest.mark.parametrize(
+    ("file_cadence", "start_time", "end_time", "expected_starts"),
+    [
+        (
+            "daily",
+            datetime(2013, 2, 28, 23, 50, tzinfo=timezone.utc),
+            datetime(2013, 3, 3, 22, 10, tzinfo=timezone.utc),
+            [
+                datetime(2013, 2, 28, tzinfo=timezone.utc),
+                *(datetime(2013, 3, d, tzinfo=timezone.utc) for d in (1, 2, 3)),
+            ],
+        ),
+        (
+            "monthly",
+            datetime(2024, 1, 15, 12, tzinfo=timezone.utc),
+            datetime(2024, 3, 1, 6, tzinfo=timezone.utc),
+            [datetime(2024, m, 1, tzinfo=timezone.utc) for m in (1, 2, 3)],
+        ),
+    ],
+)
+def test_download_includes_end_file_when_start_is_late_in_its_day(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    file_cadence: str,
+    start_time: datetime,
+    end_time: datetime,
+    expected_starts: list[datetime],
+) -> None:
+    """A start time later in its day than the end time must not drop the file of the end day or month.
+
+    Stepping a full day from 2013-02-28 23:50 would land on 2013-03-03 23:50, past the end time, and skip
+    the 03-03 file; the same holds for months stepped from a time of day later than the end's.
+    """
+    download_mod = importlib.import_module("el_paso.download")
+
+    steps: list[datetime] = []
+    monkeypatch.setattr(download_mod, "_download_single_step", lambda curr_time, **_kwargs: steps.append(curr_time))
+
+    ep.download(
+        start_time=start_time,
+        end_time=end_time,
+        save_path=tmp_path,
+        file_cadence=file_cadence,  # ty:ignore[invalid-argument-type]
+        download_url="https://fake.server/data/",
+        file_name_stem="file_YYYYMMDD.cdf",
+    )
+
+    assert sorted(steps) == expected_starts
+
+
+@pytest.mark.usefixtures("enable_downloads")
+@pytest.mark.network
+def test_ftp(tmp_path: Path):
 
     start_time = datetime(2024, 1, 3, tzinfo=timezone.utc)
     end_time = datetime(2024, 1, 4, tzinfo=timezone.utc)
@@ -199,24 +274,12 @@ def test_ftp(tmp_path: Path, skip_if_unreachable: Callable[..., None]):
     assert files[0].name == "Kp_ap_Ap_SN_F107_2024.txt"
 
 
+@pytest.mark.usefixtures("enable_downloads")
+@pytest.mark.basic
 def test_exit_after_download(caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch):
+    download_module = importlib.import_module("el_paso.download")
 
-    # test if the programs exits; it should not
-    ep.download(
-        datetime(2000, 1, 1, tzinfo=timezone.utc),
-        datetime(1999, 1, 1, tzinfo=timezone.utc),
-        save_path="",
-        download_url="",
-        file_name_stem="",
-        file_cadence="daily",
-        method="request",
-        skip_existing=True,
-        sort_raw_files_by_time=True,
-    )
-
-    monkeypatch.setattr(ep, "exit_after_download", True)
-
-    with pytest.raises(SystemExit) as sample_exception:
+    def run_download() -> None:
         ep.download(
             datetime(2000, 1, 1, tzinfo=timezone.utc),
             datetime(1999, 1, 1, tzinfo=timezone.utc),
@@ -228,41 +291,53 @@ def test_exit_after_download(caplog: pytest.LogCaptureFixture, monkeypatch: pyte
             skip_existing=True,
             sort_raw_files_by_time=True,
         )
+
+    # nothing requested: neither download nor the exit check exits
+    monkeypatch.setattr(ep, "exit_after_download", False)
+    monkeypatch.delenv("EL_PASO_EXIT_AFTER_DOWNLOAD", raising=False)
+    run_download()
+    download_module.exit_if_download_only()
+
+    # ep.download itself never exits, so recipes can download several products
+    monkeypatch.setattr(ep, "exit_after_download", True)
+    run_download()
+    run_download()
+
+    # the exit happens when the recipe starts processing data
+    with pytest.raises(SystemExit) as sample_exception:
+        download_module.exit_if_download_only()
 
     assert sample_exception.value.code == 0
     assert "Exiting after ep.download is completed!" in caplog.text
 
     monkeypatch.setattr(ep, "exit_after_download", False)
     monkeypatch.setenv("EL_PASO_EXIT_AFTER_DOWNLOAD", "True")
+    run_download()
 
     with pytest.raises(SystemExit) as sample_exception:
-        ep.download(
-            datetime(2000, 1, 1, tzinfo=timezone.utc),
-            datetime(1999, 1, 1, tzinfo=timezone.utc),
-            save_path="",
-            download_url="",
-            file_name_stem="",
-            file_cadence="daily",
-            method="request",
-            skip_existing=True,
-            sort_raw_files_by_time=True,
-        )
+        download_module.exit_if_download_only()
 
     assert sample_exception.value.code == 0
-    assert "Exiting after ep.download is completed!" in caplog.text
+
+    # skipping the download takes precedence over exiting
+    monkeypatch.setattr(ep, "skip_download", True)
+    download_module.exit_if_download_only()
 
 
+@pytest.mark.minimal
+@pytest.mark.basic
 def test_skip_download_via_ep_flag(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture):
 
     monkeypatch.setattr(ep, "skip_download", True)
 
     was_called = False
 
-    def spy_function() -> None:
+    def spy_function(time: datetime) -> datetime:
         nonlocal was_called
         was_called = True
+        return time
 
-    monkeypatch.setattr(ep.utils, "enforce_utc_timezone", spy_function)
+    monkeypatch.setattr(importlib.import_module("el_paso.download"), "enforce_utc_timezone", spy_function)
 
     ep.download(
         datetime(2000, 1, 1, tzinfo=timezone.utc),
@@ -280,17 +355,20 @@ def test_skip_download_via_ep_flag(monkeypatch: pytest.MonkeyPatch, caplog: pyte
     assert "Skipping ep.download" in caplog.text
 
 
+@pytest.mark.minimal
+@pytest.mark.basic
 def test_skip_download_via_env_var(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture):
 
     monkeypatch.setenv("EL_PASO_SKIP_DOWNLOAD", "True")
 
     was_called = False
 
-    def spy_function() -> None:
+    def spy_function(time: datetime) -> datetime:
         nonlocal was_called
         was_called = True
+        return time
 
-    monkeypatch.setattr(ep.utils, "enforce_utc_timezone", spy_function)
+    monkeypatch.setattr(importlib.import_module("el_paso.download"), "enforce_utc_timezone", spy_function)
 
     ep.download(
         datetime(2000, 1, 1, tzinfo=timezone.utc),
@@ -308,6 +386,44 @@ def test_skip_download_via_env_var(monkeypatch: pytest.MonkeyPatch, caplog: pyte
     assert "Skipping ep.download" in caplog.text
 
 
+@pytest.mark.minimal
+@pytest.mark.basic
+@pytest.mark.parametrize("value", ["0", "false", "no", "off", ""])
+def test_falsy_env_values_neither_skip_nor_exit(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, value: str
+) -> None:
+    monkeypatch.setattr(ep, "skip_download", False)
+    monkeypatch.setattr(ep, "exit_after_download", False)
+    monkeypatch.setenv("EL_PASO_SKIP_DOWNLOAD", value)
+    monkeypatch.setenv("EL_PASO_EXIT_AFTER_DOWNLOAD", value)
+
+    was_called = False
+
+    def spy_function(time: datetime) -> datetime:
+        nonlocal was_called
+        was_called = True
+        return time
+
+    monkeypatch.setattr(importlib.import_module("el_paso.download"), "enforce_utc_timezone", spy_function)
+
+    ep.download(
+        datetime(2000, 1, 1, tzinfo=timezone.utc),
+        datetime(1999, 1, 1, tzinfo=timezone.utc),
+        save_path="",
+        download_url="",
+        file_name_stem="",
+        file_cadence="daily",
+        method="request",
+        skip_existing=True,
+        sort_raw_files_by_time=True,
+    )
+
+    assert was_called
+    assert "Skipping ep.download" not in caplog.text
+    assert "Exiting after ep.download" not in caplog.text
+
+
+@pytest.mark.usefixtures("enable_downloads")
 @pytest.mark.basic
 def test_skip_existing_false_does_not_overwrite_files_outside_time_range(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -359,3 +475,51 @@ def test_skip_existing_false_does_not_overwrite_files_outside_time_range(
     assert len(downloaded_urls) == 2
     assert any("data_20130102_v01.cdf" in url for url in downloaded_urls)
     assert any("data_20130103_v01.cdf" in url for url in downloaded_urls)
+
+
+def _calls_function(tree: ast.AST, dotted_name: str) -> bool:
+    return any(isinstance(node, ast.Call) and ast.unparse(node.func) == dotted_name for node in ast.walk(tree))
+
+
+@pytest.mark.minimal
+@pytest.mark.basic
+def test_recipes_with_downloads_call_exit_if_download_only() -> None:
+    recipes_dir = Path(ep.__file__).parent / "recipes"
+
+    # Private helper modules (e.g. `rbsp/_emfisis_magnetometer.py`) download data for several recipes.
+    # They must not exit themselves, since recipes call them before their other downloads, so their
+    # download functions are checked where they are called instead.
+    helper_modules = [path for path in recipes_dir.rglob("_*.py") if path.name != "__init__.py"]
+    helper_download_functions = {
+        node.name
+        for path in helper_modules
+        for node in ast.walk(ast.parse(path.read_text()))
+        if isinstance(node, ast.FunctionDef) and _calls_function(node, "ep.download")
+    }
+
+    modules_with_download = []
+    modules_without_exit = []
+
+    for module_path in sorted(recipes_dir.rglob("*.py")):
+        if module_path in helper_modules:
+            continue
+
+        tree = ast.parse(module_path.read_text())
+
+        if _calls_function(tree, "ep.download") or any(
+            _calls_function(tree, name) for name in helper_download_functions
+        ):
+            modules_with_download.append(module_path.name)
+
+            if not (
+                _calls_function(tree, "ep.exit_if_download_only")
+                or _calls_function(tree, "get_arase_orbit_level_2_variables")
+                or _calls_function(tree, "get_arase_orbit_level_3_variables")
+            ):
+                modules_without_exit.append(module_path.name)
+
+    assert modules_with_download, "No recipes calling ep.download found, the test is not checking anything."
+    assert not modules_without_exit, (
+        "Recipes that call ep.download must call ep.exit_if_download_only() after all of their downloads "
+        f"(needed for --exit-after-download): {modules_without_exit}"
+    )

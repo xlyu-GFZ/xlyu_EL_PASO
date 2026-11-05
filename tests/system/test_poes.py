@@ -4,14 +4,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import shutil
-from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Literal
-
-import pytest
 
 import el_paso as ep
+import pytest
 from el_paso.dataset import DataSet
 from el_paso.recipes.poes import process_poes_meped_electron, process_poes_ted_electron
 
@@ -19,11 +16,9 @@ from el_paso.recipes.poes import process_poes_meped_electron, process_poes_ted_e
 @pytest.mark.basic
 def test_poes_ted_electron(
     tmpdir: Path,
-    skip_if_unreachable: Callable[..., None],
     *,
     renew_solution: bool,
 ) -> None:
-    skip_if_unreachable("https://spdf.gsfc.nasa.gov")
 
     start_time = datetime(2013, 9, 8, tzinfo=timezone.utc)
     end_time = start_time + timedelta(hours=4)
@@ -40,16 +35,8 @@ def test_poes_ted_electron(
         calculate_Lm_Lstar=True,
     )
 
-    out_path = (
-        processed_data_path
-        / "POES"
-        / "metop1"
-        / f"metop1_ted_{start_time:%Y%m%d}_T89.nc"
-    )
+    out_path = processed_data_path / "POES" / "metop1" / f"metop1_ted_{start_time:%Y%m%d}_T89.nc"
     assert out_path.exists()
-
-    if renew_solution:
-        shutil.copy(out_path, Path(__file__).parent / "data" / "processed" / "POES" / "metop1")
 
     poes_proc = DataSet(
         start_time=start_time,
@@ -64,6 +51,18 @@ def test_poes_ted_electron(
             file_format="nc",
         ),
     )
+
+    if renew_solution:
+        # Copy every output file this strategy produces, so a strategy that later gains
+        # more output groups stays covered.
+        # get_file_path() needs the strategy's own rounded interval, not the raw start_time/end_time,
+        # to compute the correct file name.
+        dest_dir = Path(__file__).parent / "data" / "processed" / "POES" / "metop1"
+        interval_start, interval_end = poes_proc.saving_strategy.get_time_intervals_to_save(start_time, end_time)[0]
+        for output_file in poes_proc.saving_strategy.output_files:
+            src_path = poes_proc.saving_strategy.get_file_path(interval_start, interval_end, output_file)
+            if src_path.exists():
+                shutil.copy(src_path, dest_dir)
 
     poes_true = DataSet(
         start_time=start_time,
@@ -81,14 +80,14 @@ def test_poes_ted_electron(
 
     poes_proc.assert_equal(poes_true)
 
+
 @pytest.mark.basic
+@pytest.mark.minimal
 def test_poes_meped_electron(
     tmpdir: Path,
-    skip_if_unreachable: Callable[..., None],
     *,
     renew_solution: bool,
 ) -> None:
-    skip_if_unreachable("https://spdf.gsfc.nasa.gov")
 
     start_time = datetime(2013, 9, 8, tzinfo=timezone.utc)
     end_time = start_time + timedelta(hours=4)
@@ -104,16 +103,8 @@ def test_poes_meped_electron(
         num_cores=32,
     )
 
-    out_path = (
-        processed_data_path
-        / "POES"
-        / "noaa18"
-        / f"noaa18_meped_{start_time:%Y%m%d}_T89.nc"
-    )
+    out_path = processed_data_path / "POES" / "noaa18" / f"noaa18_meped_{start_time:%Y%m%d}_T89.nc"
     assert out_path.exists()
-
-    if renew_solution:
-        shutil.copy(out_path, Path(__file__).parent / "data" / "processed" / "POES" / "noaa18")
 
     poes_proc = DataSet(
         start_time=start_time,
@@ -128,6 +119,18 @@ def test_poes_meped_electron(
             file_format="nc",
         ),
     )
+
+    if renew_solution:
+        # Copy every output file this strategy produces, so a strategy that later gains
+        # more output groups stays covered.
+        # get_file_path() needs the strategy's own rounded interval, not the raw start_time/end_time,
+        # to compute the correct file name.
+        dest_dir = Path(__file__).parent / "data" / "processed" / "POES" / "noaa18"
+        interval_start, interval_end = poes_proc.saving_strategy.get_time_intervals_to_save(start_time, end_time)[0]
+        for output_file in poes_proc.saving_strategy.output_files:
+            src_path = poes_proc.saving_strategy.get_file_path(interval_start, interval_end, output_file)
+            if src_path.exists():
+                shutil.copy(src_path, dest_dir)
 
     poes_true = DataSet(
         start_time=start_time,

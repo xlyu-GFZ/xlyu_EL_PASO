@@ -8,11 +8,10 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Callable, Literal  # noqa: UP035
 
+import el_paso as ep
 import numpy as np
 import pytest
 from astropy import units as u  # type: ignore[reportMissingTypeStubs]
-
-import el_paso as ep
 from el_paso.dataset.utils import python2matlab
 
 if TYPE_CHECKING:
@@ -43,7 +42,8 @@ def _mock_monthly_variables() -> dict[InternalName, ep.Variable]:
         ),
         "FPDU": ep.Variable(
             original_unit=(u.cm**2 * u.s * u.sr * u.keV) ** (-1),
-            data=2 * np.arange(time_size * energy_size * alpha_size, dtype=float).reshape(
+            data=2
+            * np.arange(time_size * energy_size * alpha_size, dtype=float).reshape(
                 time_size,
                 energy_size,
                 alpha_size,
@@ -64,6 +64,7 @@ def _mock_monthly_variables() -> dict[InternalName, ep.Variable]:
         ),
         "B_Calc": ep.Variable(original_unit=u.nT, data=np.full(time_size, 75.0)),
         "B_Eq": ep.Variable(original_unit=u.nT, data=np.full(time_size, 50.0)),
+        "B_total_obs": ep.Variable(original_unit=u.nT, data=np.full(time_size, 70.0)),
         "InvK": ep.Variable(
             original_unit=ep.units.RE * u.G**0.5,
             data=np.full((time_size, alpha_size), 1.5),
@@ -71,6 +72,10 @@ def _mock_monthly_variables() -> dict[InternalName, ep.Variable]:
         "InvMu": ep.Variable(
             original_unit=u.MeV / u.G,
             data=np.full((time_size, energy_size, alpha_size), 2.5),
+        ),
+        "InvMu_obs": ep.Variable(
+            original_unit=u.MeV / u.G,
+            data=np.full((time_size, energy_size, alpha_size), 2.7),
         ),
         "Position": ep.Variable(
             original_unit=ep.units.RE,
@@ -113,6 +118,7 @@ _FORMAT_PARAMS = [
 ]
 
 
+@pytest.mark.minimal
 @pytest.mark.basic
 @pytest.mark.parametrize("data_standard", [ep.data_standards.GFZStandard, ep.data_standards.PRBEMStandard])
 @pytest.mark.parametrize(("output_format", "meta_keys_check"), _FORMAT_PARAMS)
@@ -196,7 +202,8 @@ def _mock_monthly_variables_for_append() -> dict[InternalName, ep.Variable]:
         ),
         "FPDU": ep.Variable(
             original_unit=(u.cm**2 * u.s * u.sr * u.keV) ** (-1),
-            data=2 * np.arange(time_size * energy_size * alpha_size, dtype=float).reshape(
+            data=2
+            * np.arange(time_size * energy_size * alpha_size, dtype=float).reshape(
                 time_size,
                 energy_size,
                 alpha_size,
@@ -218,6 +225,7 @@ def _mock_monthly_variables_for_append() -> dict[InternalName, ep.Variable]:
         ),
         "B_Calc": ep.Variable(original_unit=u.nT, data=np.full(time_size, 75.0)),
         "B_Eq": ep.Variable(original_unit=u.nT, data=np.full(time_size, 50.0)),
+        "B_total_obs": ep.Variable(original_unit=u.nT, data=np.full(time_size, 70.0)),
         "InvK": ep.Variable(
             original_unit=ep.units.RE * u.G**0.5,
             data=np.full((time_size, alpha_size), 1.5),
@@ -225,6 +233,10 @@ def _mock_monthly_variables_for_append() -> dict[InternalName, ep.Variable]:
         "InvMu": ep.Variable(
             original_unit=u.MeV / u.G,
             data=np.full((time_size, energy_size, alpha_size), 2.5),
+        ),
+        "InvMu_obs": ep.Variable(
+            original_unit=u.MeV / u.G,
+            data=np.full((time_size, energy_size, alpha_size), 2.7),
         ),
         "Position": ep.Variable(
             original_unit=ep.units.RE,
@@ -248,6 +260,7 @@ def _mock_monthly_variables_for_append() -> dict[InternalName, ep.Variable]:
     return variables
 
 
+@pytest.mark.minimal
 @pytest.mark.basic
 @pytest.mark.parametrize("data_standard", [ep.data_standards.GFZStandard, ep.data_standards.PRBEMStandard])
 @pytest.mark.parametrize(("output_format", "meta_keys_check"), _FORMAT_PARAMS)
@@ -355,6 +368,7 @@ def test_append_data(
         assert var_attrs.get("unit", "unknown") != "unknown"
 
 
+@pytest.mark.minimal
 @pytest.mark.basic
 def test_save_raises_when_required_dimension_is_missing(
     tmp_path: Path,
@@ -390,6 +404,8 @@ def test_save_raises_when_required_dimension_is_missing(
             time_var=variables["Epoch"],
         )
 
+
+@pytest.mark.minimal
 @pytest.mark.basic
 def test_save_raises_when_required_dimension_is_missing_tuples(
     tmp_path: Path,
@@ -416,8 +432,10 @@ def test_save_raises_when_required_dimension_is_missing_tuples(
 
     with pytest.raises(
         ValueError,
-        match=(r"Data for the following dimensions is not saved: 'Energy_FEDU' \(required by: FEDU\); "
-              r"'Energy_FPDU' \(required by: FPDU\); 'Energy_FEDU or Energy_FPDU' \(required by: InvMu, PSD\)")
+        match=(
+            r"Data for the following dimensions is not saved: 'Energy_FEDU' \(required by: FEDU\); "
+            r"'Energy_FPDU' \(required by: FPDU\); 'Energy_FEDU or Energy_FPDU' \(required by: InvMu, InvMu_obs, PSD\)"
+        ),
     ):
         ep.save(
             variables,

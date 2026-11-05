@@ -8,11 +8,10 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
+import el_paso as ep
 import numpy as np
 import pytest
 from astropy import units as u
-
-import el_paso as ep
 from el_paso.dataset.utils import python2matlab
 
 if TYPE_CHECKING:
@@ -52,6 +51,7 @@ def _mock_monthly_variables() -> dict[InternalName, ep.Variable]:
         ),
         "B_Calc": ep.Variable(original_unit=u.nT, data=np.full(time_size, 75.0)),
         "B_Eq": ep.Variable(original_unit=u.nT, data=np.full(time_size, 50.0)),
+        "B_total_obs": ep.Variable(original_unit=u.nT, data=np.full(time_size, 70.0)),
         "InvK": ep.Variable(
             original_unit=ep.units.RE * u.G**0.5,
             data=np.full((time_size, alpha_size), 1.5),
@@ -59,6 +59,10 @@ def _mock_monthly_variables() -> dict[InternalName, ep.Variable]:
         "InvMu": ep.Variable(
             original_unit=u.MeV / u.G,
             data=np.full((time_size, energy_size, alpha_size), 2.5),
+        ),
+        "InvMu_obs": ep.Variable(
+            original_unit=u.MeV / u.G,
+            data=np.full((time_size, energy_size, alpha_size), 2.7),
         ),
         "Position": ep.Variable(
             original_unit=ep.units.RE,
@@ -78,6 +82,7 @@ def _mock_monthly_variables() -> dict[InternalName, ep.Variable]:
             original_unit=u.dimensionless_unscaled,
             data=np.full((time_size, alpha_size), 5.5),
         ),
+        "Kp": ep.Variable(original_unit=u.dimensionless_unscaled, data=np.full(time_size, 2.0)),
     }
 
     for variable in variables.values():
@@ -89,6 +94,7 @@ def _mock_monthly_variables() -> dict[InternalName, ep.Variable]:
 _STANDARD_META_KEYS = {"unit", "original_cadence_seconds", "source_files", "processing_notes", "description"}
 
 
+@pytest.mark.minimal
 @pytest.mark.basic
 @pytest.mark.parametrize("data_standard", [ep.data_standards.PRBEMStandard, ep.data_standards.GFZStandard])
 def test_monthly_rb_strategy_saves_mocked_variables_to_netcdf_with_data_standards(
@@ -137,6 +143,11 @@ def test_monthly_rb_strategy_saves_mocked_variables_to_netcdf_with_data_standard
         assert expected_variables is not None
 
         for internal_name, expected_variable in expected_variables.items():
+            if expected_variable.get_data().size == 0:
+                # save_incomplete=True fills genuinely missing variables (e.g. Kp, which
+                # _mock_monthly_variables() does not provide) with an empty placeholder that
+                # save() skips writing entirely, so there is nothing to compare against.
+                continue
             standard_name = strategy.data_standard.get_standard_name(internal_name)
             np.testing.assert_allclose(
                 np.asarray(loaded_data[standard_name][time_mask, ...], dtype=float),
@@ -178,6 +189,7 @@ def _mock_monthly_variables_for_append() -> dict[InternalName, ep.Variable]:
         ),
         "B_Calc": ep.Variable(original_unit=u.nT, data=np.full(time_size, 75.0)),
         "B_Eq": ep.Variable(original_unit=u.nT, data=np.full(time_size, 50.0)),
+        "B_total_obs": ep.Variable(original_unit=u.nT, data=np.full(time_size, 70.0)),
         "InvK": ep.Variable(
             original_unit=ep.units.RE * u.G**0.5,
             data=np.full((time_size, alpha_size), 1.5),
@@ -185,6 +197,10 @@ def _mock_monthly_variables_for_append() -> dict[InternalName, ep.Variable]:
         "InvMu": ep.Variable(
             original_unit=u.MeV / u.G,
             data=np.full((time_size, energy_size, alpha_size), 2.5),
+        ),
+        "InvMu_obs": ep.Variable(
+            original_unit=u.MeV / u.G,
+            data=np.full((time_size, energy_size, alpha_size), 2.7),
         ),
         "Position": ep.Variable(
             original_unit=ep.units.RE,
@@ -208,6 +224,7 @@ def _mock_monthly_variables_for_append() -> dict[InternalName, ep.Variable]:
     return variables
 
 
+@pytest.mark.minimal
 @pytest.mark.basic
 @pytest.mark.parametrize(
     "data_standard",
